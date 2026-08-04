@@ -56,11 +56,12 @@ ALTER TABLE "PressRoom" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "MoneyEvents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AccessToken" ENABLE ROW LEVEL SECURITY;
 
--- Politicas permisivas para el service role key
-CREATE POLICY "Allow all for service role" ON "LeagueUsers" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for service role" ON "PressRoom" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for service role" ON "MoneyEvents" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for service role" ON "AccessToken" FOR ALL USING (true) WITH CHECK (true);
+-- Politicas RLS: anon solo lectura en tablas de datos, AccessToken bloqueado
+-- (service_role key ignora RLS automaticamente, no necesita politica)
+CREATE POLICY "anon_read" ON "LeagueUsers" FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON "PressRoom" FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON "MoneyEvents" FOR SELECT USING (true);
+-- AccessToken: sin politica = acceso bloqueado para anon
 
 -- Vista: Dashboard de usuarios (Balance, Valor Equipo, Puja Maxima)
 -- Balance = 200M - compras + ventas + repartos de dinero
