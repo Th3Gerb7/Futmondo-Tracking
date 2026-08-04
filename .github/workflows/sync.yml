@@ -1,0 +1,32 @@
+name: Futmondo Sync
+
+on:
+  schedule:
+    # 08:30 Madrid (06:30 UTC verano / 07:30 UTC invierno)
+    - cron: "30 6 * * *"
+    # 23:30 Madrid (21:30 UTC verano / 22:30 UTC invierno)
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.main

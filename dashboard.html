@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Futmondo Tracker — Liga Pipipopo 26/27</title>
+<style>
+:root {
+  --bg: #0C1220;
+  --bg-card: #151F2E;
+  --bg-card-alt: #1A2638;
+  --bg-hover: #1E2D42;
+  --border: #243044;
+  --accent: #00DC82;
+  --accent-dim: rgba(0,220,130,.12);
+  --negative: #F0604D;
+  --negative-dim: rgba(240,96,77,.12);
+  --warn: #F5A623;
+  --text-1: #E8ECF1;
+  --text-2: #8A99B0;
+  --text-3: #5A6A82;
+  --highlight-row: rgba(0,220,130,.06);
+  --highlight-border: rgba(0,220,130,.3);
+  --bar-bg: rgba(0,220,130,.08);
+  --bar-fill: rgba(0,220,130,.35);
+  --shadow: 0 1px 3px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #F0EDE8;
+    --bg-card: #FFFFFF;
+    --bg-card-alt: #F8F6F3;
+    --bg-hover: #F0EDE8;
+    --border: #DDD8D0;
+    --accent: #059652;
+    --accent-dim: rgba(5,150,82,.08);
+    --negative: #D93830;
+    --negative-dim: rgba(217,56,48,.08);
+    --warn: #C4850C;
+    --text-1: #1A1A1A;
+    --text-2: #6B7280;
+    --text-3: #9CA3AF;
+    --highlight-row: rgba(5,150,82,.05);
+    --highlight-border: rgba(5,150,82,.25);
+    --bar-bg: rgba(5,150,82,.06);
+    --bar-fill: rgba(5,150,82,.22);
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #F0EDE8;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #F8F6F3;
+  --bg-hover: #F0EDE8;
+  --border: #DDD8D0;
+  --accent: #059652;
+  --accent-dim: rgba(5,150,82,.08);
+  --negative: #D93830;
+  --negative-dim: rgba(217,56,48,.08);
+  --warn: #C4850C;
+  --text-1: #1A1A1A;
+  --text-2: #6B7280;
+  --text-3: #9CA3AF;
+  --highlight-row: rgba(5,150,82,.05);
+  --highlight-border: rgba(5,150,82,.25);
+  --bar-bg: rgba(5,150,82,.06);
+  --bar-fill: rgba(5,150,82,.22);
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0C1220;
+  --bg-card: #151F2E;
+  --bg-card-alt: #1A2638;
+  --bg-hover: #1E2D42;
+  --border: #243044;
+  --accent: #00DC82;
+  --accent-dim: rgba(0,220,130,.12);
+  --negative: #F0604D;
+  --negative-dim: rgba(240,96,77,.12);
+  --warn: #F5A623;
+  --text-1: #E8ECF1;
+  --text-2: #8A99B0;
+  --text-3: #5A6A82;
+  --highlight-row: rgba(0,220,130,.06);
+  --highlight-border: rgba(0,220,130,.3);
+  --bar-bg: rgba(0,220,130,.08);
+  --bar-fill: rgba(0,220,130,.35);
+  --shadow: 0 1px 3px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.league-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text-1);
+}
+
+.league-name span {
+  color: var(--accent);
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sync-status {
+  font-size: .75rem;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.theme-toggle {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: .8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.theme-toggle:hover { background: var(--bg-hover); }
+
+/* Stat Cards */
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card.accent { border-color: var(--highlight-border); background: var(--highlight-row); }
+
+.stat-label {
+  font-size: .65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+}
+
+.stat-value.positive { color: var(--accent); }
+.stat-value.rank { color: var(--warn); }
+
+.stat-sub {
+  font-size: .72rem;
+  color: var(--text-3);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section */
+.section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-3);
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
+
+/* Table */
+.table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+  box-shadow: var(--shadow);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+thead th {
+  text-align: left;
+  font-size: .65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-3);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+}
+
+thead th.num { text-align: right; }
+
+tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  color: var(--text-1);
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--bg-hover); }
+
+tbody tr.is-me {
+  background: var(--highlight-row);
+}
+tbody tr.is-me td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+td.num {
+  text-align: right;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: .78rem;
+}
+
+td.neg { color: var(--negative); }
+td.pos { color: var(--accent); }
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: .7rem;
+  font-weight: 700;
+  background: var(--bg-card-alt);
+  color: var(--text-2);
+}
+
+.rank-badge.top1 { background: var(--accent-dim); color: var(--accent); }
+.rank-badge.top3 { background: var(--accent-dim); color: var(--accent); }
+
+/* Balance bar */
+.balance-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.balance-bar .bar {
+  flex: 0 0 60px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bar-bg);
+  overflow: hidden;
+}
+
+.balance-bar .bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--bar-fill);
+  transition: width .6s ease;
+}
+
+/* Transactions */
+.tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.tx-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-card);
+  align-items: center;
+}
+
+.tx-item:hover { background: var(--bg-hover); }
+
+.tx-player {
+  font-weight: 600;
+  font-size: .82rem;
+}
+
+.tx-detail {
+  font-size: .72rem;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.tx-amount {
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: .82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tx-amount.buy { color: var(--negative); }
+.tx-amount.sell { color: var(--accent); }
+
+.tx-date {
+  font-size: .65rem;
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-3);
+  font-size: .85rem;
+  gap: 10px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error */
+.error-msg {
+  background: var(--negative-dim);
+  border: 1px solid var(--negative);
+  color: var(--negative);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: .82rem;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .stat-cards { grid-template-columns: 1fr; }
+  .stat-value { font-size: 1.25rem; }
+  .balance-bar .bar { display: none; }
+  table { font-size: .76rem; }
+  td, th { padding: 8px 10px; }
+  .container { padding: 12px 12px 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-dot { animation: none; }
+  .spinner { animation: none; }
+  .balance-bar .bar-fill { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="league-name"><span>⚽</span> Liga Pipipopo 26/27</div>
+    <div class="header-meta">
+      <div class="sync-status">
+        <div class="sync-dot"></div>
+        <span id="sync-time">Cargando...</span>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">◐</button>
+    </div>
+  </header>
+
+  <div id="stats-section" class="stat-cards">
+    <div class="loading"><div class="spinner"></div> Conectando con Supabase...</div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">Clasificación por balance</div>
+    <div id="ranking-section">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">Últimas operaciones</div>
+    <div id="tx-section">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://xmyhsgnvzmmixpnwmhxd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PGlRvjI2DSQQ21BwAQyOAg_javhN6Mk';
+const MY_USER_ID = '610386f21a3e3f2c97060c03';
+const INITIAL_BUDGET = 200000000;
+
+function fmt(n) {
+  if (n == null) return '—';
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  const now = new Date();
+  const diff = now - dt;
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'Hoy ' + dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  if (days === 1) return 'Ayer';
+  if (days < 7) return `Hace ${days} días`;
+  return dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+async function query(table, params = '') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+    }
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : (current === 'light' ? null : 'dark');
+  if (next) {
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  } else {
+    root.removeAttribute('data-theme');
+    localStorage.removeItem('theme');
+  }
+}
+
+function renderStats(dashboard) {
+  const me = dashboard.find(u => u.IDUser === MY_USER_ID);
+  if (!me) return;
+
+  const sorted = [...dashboard].sort((a, b) => b.Balance - a.Balance);
+  const myRank = sorted.findIndex(u => u.IDUser === MY_USER_ID) + 1;
+  const spent = INITIAL_BUDGET - me.Balance;
+
+  document.getElementById('stats-section').innerHTML = `
+    <div class="stat-card accent">
+      <div class="stat-label">Tu balance</div>
+      <div class="stat-value positive">${fmt(me.Balance)}</div>
+      <div class="stat-sub">Gastado: ${fmt(spent)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Puja máxima</div>
+      <div class="stat-value">${fmt(me.PujaMaxima)}</div>
+      <div class="stat-sub">Balance + 50% equipo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tu posición</div>
+      <div class="stat-value rank">#${myRank} de ${sorted.length}</div>
+      <div class="stat-sub">Valor equipo: ${fmt(me.ValorEquipo)}</div>
+    </div>
+  `;
+}
+
+function renderRanking(dashboard) {
+  const sorted = [...dashboard].sort((a, b) => b.Balance - a.Balance);
+  const maxBal = INITIAL_BUDGET;
+
+  let rows = sorted.map((u, i) => {
+    const rank = i + 1;
+    const isMe = u.IDUser === MY_USER_ID;
+    const pct = Math.max(0, Math.min(100, (u.Balance / maxBal) * 100));
+    const rankClass = rank === 1 ? 'top1' : rank <= 3 ? 'top3' : '';
+    const spent = INITIAL_BUDGET - u.Balance;
+
+    return `<tr class="${isMe ? 'is-me' : ''}">
+      <td><span class="rank-badge ${rankClass}">${rank}</span></td>
+      <td>${u.NameInGame || u.UserName}</td>
+      <td class="num">${fmt(u.Balance)}</td>
+      <td class="num">${fmt(u.ValorEquipo)}</td>
+      <td class="num">${fmt(u.PujaMaxima)}</td>
+      <td class="num ${spent > 0 ? 'neg' : ''}">${spent > 0 ? '-' + fmt(spent) : '0'}</td>
+      <td>
+        <div class="balance-bar">
+          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ranking-section').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>Equipo</th>
+            <th class="num">Balance</th>
+            <th class="num">Valor Eq.</th>
+            <th class="num">Puja Máx.</th>
+            <th class="num">Gastado</th>
+            <th style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderTransactions(txs, users) {
+  if (!txs.length) {
+    document.getElementById('tx-section').innerHTML = '<div class="loading">Sin operaciones recientes</div>';
+    return;
+  }
+
+  const userMap = {};
+  users.forEach(u => { userMap[u.IDUser] = u.NameInGame || u.UserName; });
+
+  const items = txs.map(tx => {
+    const buyer = userMap[tx.IDPurchaseUser] || '';
+    const seller = userMap[tx.IDSalesUser] || 'Mercado';
+    const amount = Math.abs(tx.PurchaseAmount || tx.SalesAmount || 0);
+    const isBuy = !!tx.IDPurchaseUser;
+
+    let detail = '';
+    if (tx.TransactionType === 'Compra-Venta') {
+      detail = `${buyer} ← ${seller}`;
+    } else if (tx.TransactionType === 'Compra') {
+      detail = `${buyer} ← Mercado`;
+    } else {
+      detail = tx.TransactionType || '';
+    }
+
+    return `<div class="tx-item">
+      <div>
+        <div class="tx-player">${tx.FootballPlayer || '—'}</div>
+        <div class="tx-detail">${detail}</div>
+      </div>
+      <div>
+        <div class="tx-amount ${isBuy ? 'buy' : 'sell'}">${isBuy ? '-' : '+'}${fmt(amount)}</div>
+        <div class="tx-date">${fmtDate(tx.TransactionDate)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('tx-section').innerHTML = `<div class="tx-list">${items}</div>`;
+}
+
+async function loadData() {
+  try {
+    const [dashboard, transactions] = await Promise.all([
+      query('UserDashboard', 'select=*'),
+      query('PressRoom', 'select=*&order=TransactionDate.desc&limit=15'),
+    ]);
+
+    renderStats(dashboard);
+    renderRanking(dashboard);
+    renderTransactions(transactions, dashboard);
+
+    document.getElementById('sync-time').textContent =
+      'Actualizado ' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    console.error(err);
+    document.getElementById('stats-section').innerHTML =
+      `<div class="error-msg">Error al conectar con Supabase: ${err.message}</div>`;
+  }
+}
+
+// Init
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
+loadData();
+setInterval(loadData, 300000);
+</script>
+</body>
+</html>
