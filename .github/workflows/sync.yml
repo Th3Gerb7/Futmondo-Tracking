@@ -2,15 +2,22 @@ name: Futmondo Sync
 
 on:
   schedule:
-    # 08:30 Madrid (06:30 UTC verano / 07:30 UTC invierno)
+    # 08:30 Madrid (CEST verano = UTC+2 → 06:30 UTC)
+    # En invierno (CET = UTC+1) se ejecutará a las 07:30 Madrid
     - cron: "30 6 * * *"
-    # 23:30 Madrid (21:30 UTC verano / 22:30 UTC invierno)
+    # 23:30 Madrid (CEST verano = UTC+2 → 21:30 UTC)
+    # En invierno se ejecutará a las 22:30 Madrid
     - cron: "30 21 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: futmondo-sync
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
@@ -18,6 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt

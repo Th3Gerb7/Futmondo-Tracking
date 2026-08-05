@@ -3,6 +3,8 @@ from datetime import datetime
 import pytz
 from src.supabase_client import get_client
 
+MADRID = pytz.timezone("Europe/Madrid")
+
 
 def _normalize(name: str | None) -> str:
     if not name:
@@ -11,19 +13,16 @@ def _normalize(name: str | None) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower().strip()
 
 
-def _match_user(name: str, users: list[dict]) -> str | None:
-    norm = _normalize(name)
-    for u in users:
-        if _normalize(u["NameInGame"]) == norm:
-            return u["IDUser"]
-    return None
+def _build_user_lookup(users: list[dict]) -> dict[str, str]:
+    return {_normalize(u["NameInGame"]): u["IDUser"] for u in users if u.get("NameInGame")}
 
 
 def sync(news: list[dict]) -> None:
     db = get_client()
-    now = datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
 
     users = db.table("LeagueUsers").select("IDUser, NameInGame").execute().data or []
+    lookup = _build_user_lookup(users)
 
     api_ids = set()
     rows = []
@@ -39,10 +38,9 @@ def sync(news: list[dict]) -> None:
         buyer_name = item.get("_buyer", {}).get("name")
         seller_name = item.get("_seller", {}).get("name")
         price = item.get("price", 0)
-        created = item.get("created")
 
-        buyer_id = _match_user(buyer_name, users)
-        seller_id = _match_user(seller_name, users)
+        buyer_id = lookup.get(_normalize(buyer_name))
+        seller_id = lookup.get(_normalize(seller_name))
 
         if buyer_id and seller_id:
             tx_type = "Compra-Venta"
@@ -55,7 +53,7 @@ def sync(news: list[dict]) -> None:
 
         rows.append({
             "IDTransaction": tx_id,
-            "TransactionDate": created,
+            "TransactionDate": item.get("created"),
             "FootballPlayer": player,
             "IDPurchaseUser": buyer_id,
             "IDSalesUser": seller_id,
@@ -73,7 +71,6 @@ def sync(news: list[dict]) -> None:
     removed = db_ids - api_ids
 
     if removed:
-        for tid in removed:
-            db.table("PressRoom").delete().eq("IDTransaction", tid).execute()
+        db.table("PressRoom").delete().in_("IDTransaction", list(removed)).execute()
 
-    print(f"  PressRoom: {len(rows)} upserted, {len(removed)} eliminadas")
+    print(f"{len(rows)} upserted, {len(removed)} eliminadas")

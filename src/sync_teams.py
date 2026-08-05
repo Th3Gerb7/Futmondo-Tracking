@@ -2,10 +2,12 @@ from datetime import datetime
 import pytz
 from src.supabase_client import get_client
 
+MADRID = pytz.timezone("Europe/Madrid")
+
 
 def sync(teams: list[dict]) -> None:
     db = get_client()
-    now = datetime.now(pytz.timezone("Europe/Madrid")).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
 
     api_ids = set()
     rows = []
@@ -32,7 +34,6 @@ def sync(teams: list[dict]) -> None:
     removed = db_ids - api_ids
 
     if removed:
-        for uid in removed:
-            db.table("LeagueUsers").delete().eq("IDUser", uid).execute()
+        db.table("LeagueUsers").delete().in_("IDUser", list(removed)).execute()
 
-    print(f"  LeagueUsers: {len(rows)} upserted, {len(removed)} eliminados")
+    print(f"{len(rows)} upserted, {len(removed)} eliminados")

@@ -1,39 +1,44 @@
 import sys
+import time
 from datetime import datetime
 import pytz
 from src import futmondo_api, sync_teams, sync_pressroom
 from src.supabase_client import get_client
 
+MADRID = pytz.timezone("Europe/Madrid")
+
+
+def _step(label: str):
+    print(f"  [{label}] ", end="", flush=True)
+
 
 def run():
-    madrid = pytz.timezone("Europe/Madrid")
-    print(f"=== Futmondo Sync - {datetime.now(madrid).strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+    t0 = time.monotonic()
+    print(f"=== Futmondo Sync - {datetime.now(MADRID).strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
-    print("[1/4] Login en Futmondo...")
+    _step("1/4 Login")
     token, userid = futmondo_api.login()
-    print("  OK\n")
+    print("OK")
 
-    print("[2/4] Guardando token en Supabase...")
+    _step("2/4 Token > Supabase")
     db = get_client()
-    now = datetime.now(madrid).strftime("%Y-%m-%d %H:%M:%S")
     db.table("AccessToken").upsert({
         "ID": "futmondo_session",
         "AccessToken": token,
-        "UpdatedAt": now,
+        "UpdatedAt": datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S"),
     }).execute()
-    print("  OK\n")
+    print("OK")
 
-    print("[3/4] Sincronizando equipos...")
+    _step("3/4 Equipos")
     teams = futmondo_api.get_teams(token, userid)
     sync_teams.sync(teams)
-    print()
 
-    print("[4/4] Sincronizando transacciones...")
+    _step("4/4 Transacciones")
     news = futmondo_api.get_pressroom(token, userid)
     sync_pressroom.sync(news)
-    print()
 
-    print("=== Sync completado ===")
+    elapsed = time.monotonic() - t0
+    print(f"\n=== Completado en {elapsed:.1f}s ===")
 
 
 if __name__ == "__main__":
