@@ -741,11 +741,11 @@ function renderTransactions(txs, users) {
   }
 
   const userMap = {};
-  users.forEach(u => { userMap[u.IDUser] = u.NameInGame || u.UserName; });
+  users.forEach(u => { userMap[u.IDUser] = u.UserName; });
 
   const items = txs.map(tx => {
     const buyer = userMap[tx.IDPurchaseUser] || '';
-    const seller = userMap[tx.IDSalesUser] || 'Mercado';
+    const seller = userMap[tx.IDSalesUser] || '';
     const amount = Math.abs(tx.PurchaseAmount || tx.SalesAmount || 0);
     const isBuy = !!tx.IDPurchaseUser;
 
@@ -754,6 +754,8 @@ function renderTransactions(txs, users) {
       detail = `${buyer} ← ${seller}`;
     } else if (tx.TransactionType === 'Compra') {
       detail = `${buyer} ← Mercado`;
+    } else if (tx.TransactionType === 'Venta') {
+      detail = `${seller} → Futmondo`;
     } else {
       detail = tx.TransactionType || '';
     }
