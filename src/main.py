@@ -2,7 +2,7 @@ import sys
 import time
 from datetime import datetime
 import pytz
-from src import futmondo_api, sync_teams, sync_pressroom
+from src import futmondo_api, sync_teams, sync_pressroom, sync_squads
 from src.supabase_client import get_client
 
 MADRID = pytz.timezone("Europe/Madrid")
@@ -16,11 +16,11 @@ def run():
     t0 = time.monotonic()
     print(f"=== Futmondo Sync - {datetime.now(MADRID).strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
-    _step("1/4 Login")
+    _step("1/5 Login")
     token, userid = futmondo_api.login()
     print("OK")
 
-    _step("2/4 Token > Supabase")
+    _step("2/5 Token > Supabase")
     db = get_client()
     db.table("AccessToken").upsert({
         "ID": "futmondo_session",
@@ -29,11 +29,14 @@ def run():
     }).execute()
     print("OK")
 
-    _step("3/4 Equipos")
+    _step("3/5 Equipos")
     teams = futmondo_api.get_teams(token, userid)
     sync_teams.sync(teams)
 
-    _step("4/4 Transacciones")
+    _step("4/5 Plantillas")
+    sync_squads.sync(token, userid, teams)
+
+    _step("5/5 Transacciones")
     news = futmondo_api.get_pressroom(token, userid)
     sync_pressroom.sync(news)
 

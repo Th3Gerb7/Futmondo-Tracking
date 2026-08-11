@@ -430,6 +430,86 @@ td.pos { color: var(--accent); }
   .spinner { animation: none; }
   .balance-bar .bar-fill { transition: none; }
 }
+
+/* Expandable squad rows */
+tbody tr.clickable { cursor: pointer; }
+tbody tr.clickable td.manager-cell {
+  position: relative;
+  padding-left: 26px;
+}
+tbody tr.clickable td.manager-cell::before {
+  content: '\25B8';
+  position: absolute;
+  left: 10px;
+  color: var(--text-3);
+  font-size: .7rem;
+  transition: transform .2s;
+}
+tbody tr.clickable.expanded td.manager-cell::before {
+  transform: rotate(90deg);
+}
+
+.player-count {
+  font-size: .68rem;
+  color: var(--text-3);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+tr.squad-row { display: none; }
+tr.squad-row.visible { display: table-row; }
+tr.squad-row > td {
+  padding: 0 14px 10px 14px;
+  background: var(--bg-card-alt);
+}
+
+.squad-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .76rem;
+  margin: 6px 0 2px;
+}
+
+.squad-table th {
+  text-align: left;
+  font-size: .6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-3);
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.squad-table th.num { text-align: right; }
+
+.squad-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.squad-table tbody tr:last-child td { border-bottom: none; }
+.squad-table td.num {
+  text-align: right;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: .74rem;
+}
+.squad-table td.neg { color: var(--negative); }
+.squad-table td.pos { color: var(--accent); }
+
+.squad-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px 4px;
+  font-size: .72rem;
+  color: var(--text-3);
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.squad-summary .num {
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+}
 </style>
 </head>
 <body>
@@ -538,7 +618,25 @@ function renderStats(dashboard) {
   `;
 }
 
-function renderRanking(dashboard) {
+function buildSquads(squadPlayers) {
+  const squads = {};
+  for (const p of squadPlayers) {
+    if (!squads[p.IDUser]) squads[p.IDUser] = [];
+    squads[p.IDUser].push({
+      name: p.PlayerName,
+      position: p.Position,
+      realTeam: p.RealTeam,
+      currentValue: Number(p.CurrentValue) || 0,
+      buyPrice: Number(p.BuyPrice) || 0,
+    });
+  }
+  for (const uid of Object.keys(squads)) {
+    squads[uid].sort((a, b) => b.currentValue - a.currentValue);
+  }
+  return squads;
+}
+
+function renderRanking(dashboard, squads) {
   const sorted = [...dashboard].sort((a, b) => b.Balance - a.Balance);
   const maxBal = INITIAL_BUDGET;
 
@@ -548,10 +646,45 @@ function renderRanking(dashboard) {
     const pct = Math.max(0, Math.min(100, (u.Balance / maxBal) * 100));
     const rankClass = rank === 1 ? 'top1' : rank <= 3 ? 'top3' : '';
     const spent = INITIAL_BUDGET - u.Balance;
+    const squad = squads[u.IDUser] || [];
+    const numPlayers = squad.length;
+    const totalInvested = squad.reduce((s, p) => s + p.buyPrice, 0);
 
-    return `<tr class="${isMe ? 'is-me' : ''}">
+    const totalValue = squad.reduce((s, p) => s + p.currentValue, 0);
+
+    let squadRows = squad.map(p => {
+      const profit = p.currentValue - p.buyPrice;
+      return `<tr>
+        <td>${p.name}</td>
+        <td class="num">${fmt(p.currentValue)}</td>
+        <td class="num">${fmt(p.buyPrice)}</td>
+        <td class="num ${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : ''}${fmt(profit)}</td>
+      </tr>`;
+    }).join('');
+
+    const totalProfit = totalValue - totalInvested;
+    const squadHtml = numPlayers > 0 ? `
+      <table class="squad-table">
+        <thead><tr>
+          <th>Jugador</th>
+          <th class="num">Valor</th>
+          <th class="num">Pagado</th>
+          <th class="num">+/-</th>
+        </tr></thead>
+        <tbody>${squadRows}</tbody>
+      </table>
+      <div class="squad-summary">
+        <span>${numPlayers} jugadores</span>
+        <span>Valor: <span class="num">${fmt(totalValue)}</span></span>
+        <span>Invertido: <span class="num">${fmt(totalInvested)}</span></span>
+        <span class="${totalProfit >= 0 ? 'pos' : 'neg'}">
+          ${totalProfit >= 0 ? '+' : ''}${fmt(totalProfit)}
+        </span>
+      </div>` : '<div class="squad-summary">Sin jugadores fichados</div>';
+
+    return `<tr class="${isMe ? 'is-me' : ''} clickable" data-uid="${u.IDUser}">
       <td><span class="rank-badge ${rankClass}">${rank}</span></td>
-      <td>${u.NameInGame || u.UserName}</td>
+      <td class="manager-cell">${u.UserName}<span class="player-count">(${numPlayers})</span></td>
       <td class="num">${fmt(u.Balance)}</td>
       <td class="num">${fmt(u.ValorEquipo)}</td>
       <td class="num">${fmt(u.PujaMaxima)}</td>
@@ -561,6 +694,9 @@ function renderRanking(dashboard) {
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
         </div>
       </td>
+    </tr>
+    <tr class="squad-row" data-squad-for="${u.IDUser}">
+      <td colspan="7">${squadHtml}</td>
     </tr>`;
   }).join('');
 
@@ -570,7 +706,7 @@ function renderRanking(dashboard) {
         <thead>
           <tr>
             <th style="width:40px">#</th>
-            <th>Equipo</th>
+            <th>Manager</th>
             <th class="num">Balance</th>
             <th class="num">Valor Eq.</th>
             <th class="num">Puja Máx.</th>
@@ -582,6 +718,20 @@ function renderRanking(dashboard) {
       </table>
     </div>
   `;
+
+  document.querySelectorAll('tr.clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      const uid = row.dataset.uid;
+      const squadRow = document.querySelector(`tr[data-squad-for="${uid}"]`);
+      const wasExpanded = row.classList.contains('expanded');
+      document.querySelectorAll('tr.clickable.expanded').forEach(r => r.classList.remove('expanded'));
+      document.querySelectorAll('tr.squad-row.visible').forEach(r => r.classList.remove('visible'));
+      if (!wasExpanded) {
+        row.classList.add('expanded');
+        squadRow.classList.add('visible');
+      }
+    });
+  });
 }
 
 function renderTransactions(txs, users) {
@@ -625,13 +775,15 @@ function renderTransactions(txs, users) {
 
 async function loadData() {
   try {
-    const [dashboard, transactions] = await Promise.all([
+    const [dashboard, transactions, squadPlayers] = await Promise.all([
       query('UserDashboard', 'select=*'),
       query('PressRoom', 'select=*&order=TransactionDate.desc&limit=15'),
+      query('SquadPlayers', 'select=IDUser,PlayerName,Position,RealTeam,CurrentValue,BuyPrice'),
     ]);
 
+    const squads = buildSquads(squadPlayers);
     renderStats(dashboard);
-    renderRanking(dashboard);
+    renderRanking(dashboard, squads);
     renderTransactions(transactions, dashboard);
 
     document.getElementById('sync-time').textContent =

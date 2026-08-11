@@ -78,3 +78,20 @@ def get_pressroom(token: str, userid: str) -> list[dict]:
     if news is None:
         raise RuntimeError(f"No se obtuvieron transacciones: {answer.get('code', 'unknown')}")
     return news
+
+
+def get_roster(token: str, userid: str, userteam_id: str) -> list[dict]:
+    body = {
+        "header": {"token": token, "userid": userid},
+        "query": {
+            "userteamId": userteam_id,
+            "championshipId": CHAMPIONSHIP_ID,
+        },
+        "answer": {},
+    }
+    resp = _get_session().post(f"{BASE_URL}/1/userteam/roster", json=body, timeout=30)
+    resp.raise_for_status()
+    answer = resp.json().get("answer", [])
+    if not isinstance(answer, list):
+        raise RuntimeError(f"Roster inesperado para {userteam_id}")
+    return answer
