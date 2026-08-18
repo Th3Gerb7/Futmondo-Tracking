@@ -28,7 +28,11 @@ def sync(news: list[dict]) -> None:
         api_ids.add(event_id)
 
         data = item.get("data", {})
-        user_id = item.get("u")
+        raw_u = item.get("u")
+        if isinstance(raw_u, dict):
+            user_id = raw_u.get("_id") or raw_u.get("userid") or raw_u.get("id")
+        else:
+            user_id = raw_u
         amount = data.get("money", 0)
         team_name = data.get("name", "")
 
