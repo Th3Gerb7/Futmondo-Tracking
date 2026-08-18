@@ -70,14 +70,36 @@ def get_teams(token: str, userid: str) -> list[dict]:
 
 
 def get_pressroom(token: str, userid: str) -> list[dict]:
-    answer = _post("/1/locker/pressroom", token, userid, {
-        "championshipId": CHAMPIONSHIP_ID,
-        "from": "",
-    })
-    news = answer.get("news")
-    if news is None:
-        raise RuntimeError(f"No se obtuvieron transacciones: {answer.get('code', 'unknown')}")
-    return news
+    all_news = []
+    seen_ids: set[str] = set()
+    cursor = ""
+
+    while True:
+        answer = _post("/1/locker/pressroom", token, userid, {
+            "championshipId": CHAMPIONSHIP_ID,
+            "from": cursor,
+        })
+        news = answer.get("news")
+        if news is None:
+            raise RuntimeError(f"No se obtuvieron transacciones: {answer.get('code', 'unknown')}")
+        if not news:
+            break
+
+        oldest_id = ""
+        new_count = 0
+        for item in news:
+            tx_id = item.get("_id", "")
+            if tx_id and tx_id not in seen_ids:
+                seen_ids.add(tx_id)
+                all_news.append(item)
+                new_count += 1
+                oldest_id = tx_id
+
+        if new_count == 0:
+            break
+        cursor = oldest_id
+
+    return all_news
 
 
 def get_roster(token: str, userid: str, userteam_id: str) -> list[dict]:

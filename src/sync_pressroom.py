@@ -66,4 +66,11 @@ def sync(news: list[dict]) -> None:
     if rows:
         db.table("PressRoom").upsert(rows).execute()
 
-    print(f"{len(rows)} upserted")
+    existing = db.table("PressRoom").select("IDTransaction").execute().data or []
+    db_ids = {r["IDTransaction"] for r in existing}
+    removed = db_ids - api_ids
+
+    if removed:
+        db.table("PressRoom").delete().in_("IDTransaction", list(removed)).execute()
+
+    print(f"{len(rows)} upserted, {len(removed)} eliminadas")
