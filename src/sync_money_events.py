@@ -10,6 +10,13 @@ def _normalize(s: str) -> str:
     return unicodedata.normalize("NFKD", s).casefold().strip()
 
 
+# Nombres de equipo antiguos que ya no coinciden con LeagueUsers.NameInGame.
+# Se usan como fallback cuando el match normal falla.
+HISTORICAL_NAMES: dict[str, str] = {
+    _normalize("\U0001f468\U0001f3fb‍✈️IL CONSTRUTORE WL"): "5a60ebbc7f21925d0b1b70d6",  # Marc Galvez
+}
+
+
 def sync(news: list[dict]) -> None:
     db = get_client()
     now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
@@ -23,14 +30,18 @@ def sync(news: list[dict]) -> None:
 
     customize = [n for n in news if n.get("styp") == "customize"]
 
+    existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
+    existing_ids = {r["IDEvent"] for r in existing}
+
+    new_events = [
+        item for item in customize
+        if item.get("_id") and item["_id"] not in existing_ids
+    ]
+
     rows = []
     unmatched = []
 
-    for item in customize:
-        event_id = item.get("_id")
-        if not event_id:
-            continue
-
+    for item in new_events:
         data = item.get("data", {})
         team_name = data.get("name", "")
         amount = data.get("money", 0)
@@ -45,11 +56,14 @@ def sync(news: list[dict]) -> None:
                     break
 
         if not user_id:
+            user_id = HISTORICAL_NAMES.get(norm)
+
+        if not user_id:
             unmatched.append(team_name)
             continue
 
         rows.append({
-            "IDEvent": event_id,
+            "IDEvent": item["_id"],
             "EventDate": item.get("created"),
             "IDUser": user_id,
             "Amount": amount,
@@ -61,14 +75,7 @@ def sync(news: list[dict]) -> None:
     if rows:
         db.table("MoneyEvents").upsert(rows).execute()
 
-    existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
-    db_ids = {r["IDEvent"] for r in existing}
-    matched_ids = {r["IDEvent"] for r in rows}
-    removed = db_ids - matched_ids
-    if removed:
-        db.table("MoneyEvents").delete().in_("IDEvent", list(removed)).execute()
-
-    print(f"{len(rows)} upserted, {len(removed)} eliminados", end="")
+    print(f"{len(rows)} nuevos, {len(existing_ids)} existentes", end="")
     if unmatched:
         unique = sorted(set(unmatched))
         print(f" ({len(unmatched)} sin match: {', '.join(unique)})", end="")
