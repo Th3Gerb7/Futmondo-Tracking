@@ -43,7 +43,7 @@ def sync(news: list[dict]) -> None:
         user_id = lookup.get(_normalize(team_name))
 
         if not user_id:
-            unmatched.append(team_name)
+            unmatched.append(f"{repr(team_name)}→{repr(_normalize(team_name))}")
             continue
 
         rows.append({
@@ -67,6 +67,6 @@ def sync(news: list[dict]) -> None:
 
     print(f"{len(rows)} upserted, {len(removed)} eliminados", end="")
     if unmatched:
-        unique = sorted(set(unmatched))
-        print(f" ({len(unmatched)} sin match: {', '.join(unique)})", end="")
+        print(f"\n    Sin match: {unmatched}")
+        print(f"    Lookup keys: {sorted(lookup.keys())}", end="")
     print()
