@@ -57,7 +57,7 @@ jobs:
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
         run: python -m src.recover_pressroom
 
-      - name: Explorar API
+      - name: Explorar News (money events)
         if: ${{ inputs.run_sync_first }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -65,7 +65,7 @@ jobs:
           FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
           FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
-        run: python -m src.explore_api
+        run: python -m src.explore_news
 
       - name: Auditar balances
         env:
