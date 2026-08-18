@@ -23,7 +23,6 @@ def sync(news: list[dict]) -> None:
 
     customize = [n for n in news if n.get("styp") == "customize"]
 
-    api_ids = set()
     rows = []
     unmatched = []
 
@@ -31,8 +30,6 @@ def sync(news: list[dict]) -> None:
         event_id = item.get("_id")
         if not event_id:
             continue
-
-        api_ids.add(event_id)
 
         data = item.get("data", {})
         team_name = data.get("name", "")
@@ -66,7 +63,8 @@ def sync(news: list[dict]) -> None:
 
     existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
     db_ids = {r["IDEvent"] for r in existing}
-    removed = db_ids - api_ids
+    matched_ids = {r["IDEvent"] for r in rows}
+    removed = db_ids - matched_ids
     if removed:
         db.table("MoneyEvents").delete().in_("IDEvent", list(removed)).execute()
 
