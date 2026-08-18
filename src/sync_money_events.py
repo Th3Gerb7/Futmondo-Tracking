@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import datetime
 import pytz
 from src.supabase_client import get_client
@@ -5,26 +6,22 @@ from src.supabase_client import get_client
 MADRID = pytz.timezone("Europe/Madrid")
 
 
+def _normalize(s: str) -> str:
+    return unicodedata.normalize("NFKD", s).casefold().strip()
+
+
 def sync(news: list[dict]) -> None:
     db = get_client()
     now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
 
-    known_ids = {
-        u["IDUser"]
-        for u in (db.table("LeagueUsers").select("IDUser").execute().data or [])
-    }
+    users = db.table("LeagueUsers").select("IDUser, NameInGame").execute().data or []
+    name_to_id: dict[str, str] = {}
+    for u in users:
+        name = u.get("NameInGame", "")
+        if name:
+            name_to_id[_normalize(name)] = u["IDUser"]
 
     customize = [n for n in news if n.get("styp") == "customize"]
-
-    if customize:
-        sample = customize[0]
-        raw_sample = sample.get("u")
-        print(f"  [DEBUG] Total customize events: {len(customize)}")
-        print(f"  [DEBUG] known_ids: {known_ids}")
-        print(f"  [DEBUG] Sample u field: {raw_sample}")
-        print(f"  [DEBUG] Sample u type: {type(raw_sample).__name__}")
-        if isinstance(raw_sample, dict):
-            print(f"  [DEBUG] u keys: {list(raw_sample.keys())}")
 
     api_ids = set()
     rows = []
@@ -38,16 +35,20 @@ def sync(news: list[dict]) -> None:
         api_ids.add(event_id)
 
         data = item.get("data", {})
-        raw_u = item.get("u")
-        if isinstance(raw_u, dict):
-            user_id = raw_u.get("userid") or raw_u.get("_id") or raw_u.get("id")
-        else:
-            user_id = raw_u
-        amount = data.get("money", 0)
         team_name = data.get("name", "")
+        amount = data.get("money", 0)
 
-        if not user_id or user_id not in known_ids:
-            unmatched.append(f"{team_name} (u={user_id})")
+        norm = _normalize(team_name)
+        user_id = name_to_id.get(norm)
+
+        if not user_id:
+            for db_key, uid in name_to_id.items():
+                if db_key.startswith(norm) or norm.startswith(db_key):
+                    user_id = uid
+                    break
+
+        if not user_id:
+            unmatched.append(team_name)
             continue
 
         rows.append({
@@ -61,14 +62,7 @@ def sync(news: list[dict]) -> None:
         })
 
     if rows:
-        result = db.table("MoneyEvents").upsert(rows).execute()
-        print(f"  [DEBUG] Upsert result count: {len(result.data) if result.data else 0}")
-
-    after = db.table("MoneyEvents").select("IDEvent, IDUser, Amount").execute().data or []
-    print(f"  [DEBUG] MoneyEvents in DB after upsert: {len(after)}")
-    if after:
-        for r in after[:3]:
-            print(f"  [DEBUG]   {r}")
+        db.table("MoneyEvents").upsert(rows).execute()
 
     existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
     db_ids = {r["IDEvent"] for r in existing}
