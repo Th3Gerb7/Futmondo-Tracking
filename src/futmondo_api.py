@@ -102,6 +102,39 @@ def get_pressroom(token: str, userid: str) -> list[dict]:
     return all_news
 
 
+def get_news(token: str, userid: str) -> list[dict]:
+    all_news = []
+    seen_ids: set[str] = set()
+    cursor = ""
+
+    while True:
+        answer = _post("/2/locker/news", token, userid, {
+            "championshipId": CHAMPIONSHIP_ID,
+            "from": cursor,
+        })
+        news = answer.get("news")
+        if news is None:
+            raise RuntimeError(f"No se obtuvieron news: {answer.get('code', 'unknown')}")
+        if not news:
+            break
+
+        oldest_id = ""
+        new_count = 0
+        for item in news:
+            nid = item.get("_id", "")
+            if nid and nid not in seen_ids:
+                seen_ids.add(nid)
+                all_news.append(item)
+                new_count += 1
+                oldest_id = nid
+
+        if new_count == 0:
+            break
+        cursor = oldest_id
+
+    return all_news
+
+
 def get_roster(token: str, userid: str, userteam_id: str) -> list[dict]:
     body = {
         "header": {"token": token, "userid": userid},
