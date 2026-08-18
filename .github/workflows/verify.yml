@@ -47,6 +47,16 @@ jobs:
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
         run: python -m src.verify_pressroom
 
+      - name: Recuperar historial PressRoom
+        if: ${{ inputs.run_sync_first }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.recover_pressroom
+
       - name: Auditar balances
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
