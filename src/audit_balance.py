@@ -17,7 +17,16 @@ def audit():
 
     print(f"Total transacciones PressRoom: {len(txs)}")
     print(f"Total MoneyEvents: {len(money)}")
-    print(f"Total usuarios: {len(users)}\n")
+    print(f"Total usuarios: {len(users)}")
+    if money:
+        unique_users = {m["IDUser"] for m in money}
+        print(f"MoneyEvents IDUser distintos: {unique_users}")
+        for m in money[:3]:
+            print(f"  Sample: {m}")
+    else:
+        print("MoneyEvents está VACÍO en la query")
+    user_ids_set = {u["IDUser"] for u in users}
+    print(f"LeagueUsers IDs: {user_ids_set}\n")
 
     print("=" * 100)
     for u in users:

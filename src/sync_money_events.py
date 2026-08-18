@@ -16,6 +16,16 @@ def sync(news: list[dict]) -> None:
 
     customize = [n for n in news if n.get("styp") == "customize"]
 
+    if customize:
+        sample = customize[0]
+        raw_sample = sample.get("u")
+        print(f"  [DEBUG] Total customize events: {len(customize)}")
+        print(f"  [DEBUG] known_ids: {known_ids}")
+        print(f"  [DEBUG] Sample u field: {raw_sample}")
+        print(f"  [DEBUG] Sample u type: {type(raw_sample).__name__}")
+        if isinstance(raw_sample, dict):
+            print(f"  [DEBUG] u keys: {list(raw_sample.keys())}")
+
     api_ids = set()
     rows = []
     unmatched = []
@@ -30,7 +40,7 @@ def sync(news: list[dict]) -> None:
         data = item.get("data", {})
         raw_u = item.get("u")
         if isinstance(raw_u, dict):
-            user_id = raw_u.get("_id") or raw_u.get("userid") or raw_u.get("id")
+            user_id = raw_u.get("userid") or raw_u.get("_id") or raw_u.get("id")
         else:
             user_id = raw_u
         amount = data.get("money", 0)
@@ -51,7 +61,14 @@ def sync(news: list[dict]) -> None:
         })
 
     if rows:
-        db.table("MoneyEvents").upsert(rows).execute()
+        result = db.table("MoneyEvents").upsert(rows).execute()
+        print(f"  [DEBUG] Upsert result count: {len(result.data) if result.data else 0}")
+
+    after = db.table("MoneyEvents").select("IDEvent, IDUser, Amount").execute().data or []
+    print(f"  [DEBUG] MoneyEvents in DB after upsert: {len(after)}")
+    if after:
+        for r in after[:3]:
+            print(f"  [DEBUG]   {r}")
 
     existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
     db_ids = {r["IDEvent"] for r in existing}
