@@ -17,6 +17,18 @@ def _build_user_lookup(users: list[dict]) -> dict[str, str]:
     return {_normalize(u["NameInGame"]): u["IDUser"] for u in users if u.get("NameInGame")}
 
 
+def _find_user(lookup: dict[str, str], name: str) -> str | None:
+    key = _normalize(name)
+    if not key:
+        return None
+    if key in lookup:
+        return lookup[key]
+    for db_key, uid in lookup.items():
+        if db_key.startswith(key):
+            return uid
+    return None
+
+
 def sync(news: list[dict]) -> None:
     db = get_client()
     now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
@@ -40,10 +52,10 @@ def sync(news: list[dict]) -> None:
         data = item.get("data", {})
         team_name = data.get("name", "")
         amount = data.get("money", 0)
-        user_id = lookup.get(_normalize(team_name))
+        user_id = _find_user(lookup, team_name)
 
         if not user_id:
-            unmatched.append(f"{repr(team_name)}→{repr(_normalize(team_name))}")
+            unmatched.append(team_name)
             continue
 
         rows.append({
@@ -67,6 +79,6 @@ def sync(news: list[dict]) -> None:
 
     print(f"{len(rows)} upserted, {len(removed)} eliminados", end="")
     if unmatched:
-        print(f"\n    Sin match: {unmatched}")
-        print(f"    Lookup keys: {sorted(lookup.keys())}", end="")
+        unique = sorted(set(unmatched))
+        print(f" ({len(unmatched)} sin match: {', '.join(unique)})", end="")
     print()
