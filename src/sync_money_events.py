@@ -1,4 +1,3 @@
-import unicodedata
 from datetime import datetime
 import pytz
 from src.supabase_client import get_client
@@ -6,35 +5,14 @@ from src.supabase_client import get_client
 MADRID = pytz.timezone("Europe/Madrid")
 
 
-def _normalize(name: str | None) -> str:
-    if not name:
-        return ""
-    nfkd = unicodedata.normalize("NFKD", name)
-    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower().strip()
-
-
-def _build_user_lookup(users: list[dict]) -> dict[str, str]:
-    return {_normalize(u["NameInGame"]): u["IDUser"] for u in users if u.get("NameInGame")}
-
-
-def _find_user(lookup: dict[str, str], name: str) -> str | None:
-    key = _normalize(name)
-    if not key:
-        return None
-    if key in lookup:
-        return lookup[key]
-    for db_key, uid in lookup.items():
-        if db_key.startswith(key):
-            return uid
-    return None
-
-
 def sync(news: list[dict]) -> None:
     db = get_client()
     now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
 
-    users = db.table("LeagueUsers").select("IDUser, NameInGame").execute().data or []
-    lookup = _build_user_lookup(users)
+    known_ids = {
+        u["IDUser"]
+        for u in (db.table("LeagueUsers").select("IDUser").execute().data or [])
+    }
 
     customize = [n for n in news if n.get("styp") == "customize"]
 
@@ -50,12 +28,12 @@ def sync(news: list[dict]) -> None:
         api_ids.add(event_id)
 
         data = item.get("data", {})
-        team_name = data.get("name", "")
+        user_id = item.get("u")
         amount = data.get("money", 0)
-        user_id = _find_user(lookup, team_name)
+        team_name = data.get("name", "")
 
-        if not user_id:
-            unmatched.append(team_name)
+        if not user_id or user_id not in known_ids:
+            unmatched.append(f"{team_name} (u={user_id})")
             continue
 
         rows.append({
