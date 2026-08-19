@@ -10,8 +10,6 @@ def _normalize(s: str) -> str:
     return unicodedata.normalize("NFKD", s).casefold().strip()
 
 
-# Nombres de equipo antiguos que ya no coinciden con LeagueUsers.NameInGame.
-# Se usan como fallback cuando el match normal falla.
 HISTORICAL_NAMES: dict[str, str] = {
     _normalize("\U0001f468\U0001f3fb‍✈️IL CONSTRUTORE WL"): "5a60ebbc7f21925d0b1b70d6",  # Marc Galvez
 }
@@ -33,15 +31,14 @@ def sync(news: list[dict]) -> None:
     existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
     existing_ids = {r["IDEvent"] for r in existing}
 
-    new_events = [
-        item for item in customize
-        if item.get("_id") and item["_id"] not in existing_ids
-    ]
-
     rows = []
     unmatched = []
 
-    for item in new_events:
+    for item in customize:
+        event_id = item.get("_id")
+        if not event_id:
+            continue
+
         data = item.get("data", {})
         team_name = data.get("name", "")
         amount = data.get("money", 0)
@@ -63,7 +60,7 @@ def sync(news: list[dict]) -> None:
             continue
 
         rows.append({
-            "IDEvent": item["_id"],
+            "IDEvent": event_id,
             "EventDate": item.get("created"),
             "IDUser": user_id,
             "Amount": amount,
@@ -75,7 +72,13 @@ def sync(news: list[dict]) -> None:
     if rows:
         db.table("MoneyEvents").upsert(rows).execute()
 
-    print(f"{len(rows)} nuevos, {len(existing_ids)} existentes", end="")
+    new_count = sum(1 for r in rows if r["IDEvent"] not in existing_ids)
+    updated = len(rows) - new_count
+    parts = [f"{new_count} nuevos"]
+    if updated:
+        parts.append(f"{updated} verificados")
+    parts.append(f"{len(existing_ids)} en BD")
+    print(", ".join(parts), end="")
     if unmatched:
         unique = sorted(set(unmatched))
         print(f" ({len(unmatched)} sin match: {', '.join(unique)})", end="")
