@@ -12,6 +12,7 @@ def _normalize(s: str) -> str:
 
 HISTORICAL_NAMES: dict[str, str] = {
     _normalize("\U0001f468\U0001f3fb‍✈️IL CONSTRUTORE WL"): "5a60ebbc7f21925d0b1b70d6",  # Marc Galvez
+    _normalize("Ivan burkiewicz"): "684b04144e95775f1fce5faa",  # Ivan burkiewicz
 }
 
 
