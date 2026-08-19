@@ -18,7 +18,11 @@ def _get_session() -> requests.Session:
             "Referer": "https://app.futmondo.com/",
             "User-Agent": "Mozilla/5.0",
         })
-        retry = Retry(total=2, backoff_factor=1, status_forcelist=[502, 503, 504])
+        retry = Retry(
+            total=3, backoff_factor=1,
+            status_forcelist=[502, 503, 504],
+            allowed_methods=frozenset(["POST"]),
+        )
         _session.mount("https://", HTTPAdapter(max_retries=retry))
     return _session
 
