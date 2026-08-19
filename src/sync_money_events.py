@@ -37,7 +37,7 @@ def sync(news: list[dict]) -> None:
 
     for item in customize:
         event_id = item.get("_id")
-        if not event_id:
+        if not event_id or event_id in existing_ids:
             continue
 
         data = item.get("data", {})
@@ -71,15 +71,9 @@ def sync(news: list[dict]) -> None:
         })
 
     if rows:
-        db.table("MoneyEvents").upsert(rows).execute()
+        db.table("MoneyEvents").insert(rows).execute()
 
-    new_count = sum(1 for r in rows if r["IDEvent"] not in existing_ids)
-    updated = len(rows) - new_count
-    parts = [f"{new_count} nuevos"]
-    if updated:
-        parts.append(f"{updated} verificados")
-    parts.append(f"{len(existing_ids)} en BD")
-    print(", ".join(parts), end="")
+    print(f"{len(rows)} nuevos, {len(existing_ids)} en BD", end="")
     if unmatched:
         unique = sorted(set(unmatched))
         print(f" ({len(unmatched)} sin match: {', '.join(unique)})", end="")
