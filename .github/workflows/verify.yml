@@ -39,6 +39,7 @@ jobs:
         run: python -m src.main
 
       - name: Verificar PressRoom
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

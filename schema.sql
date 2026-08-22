@@ -66,6 +66,8 @@ CREATE POLICY "anon_read" ON "MoneyEvents" FOR SELECT USING (true);
 -- Vista: Dashboard de usuarios (Balance, Valor Equipo, Puja Maxima)
 -- Balance = 200M - compras + ventas + repartos de dinero
 -- Puja Maxima = Balance + 50% del valor del equipo (config liga)
+-- NOTA: usa UNION ALL para generar una fila por comprador y otra por vendedor,
+-- evitando que COALESCE pierda las ventas en transacciones Compra-Venta.
 CREATE OR REPLACE VIEW "UserDashboard" AS
 SELECT
     u."IDUser",
@@ -83,12 +85,19 @@ SELECT
         + (u."ActualValueTeam" * 0.50)) AS "PujaMaxima"
 FROM "LeagueUsers" u
 LEFT JOIN (
-    SELECT
-        COALESCE(p."IDPurchaseUser", p."IDSalesUser") AS uid,
-        SUM(CASE WHEN p."IDPurchaseUser" = COALESCE(p."IDPurchaseUser", p."IDSalesUser") THEN p."PurchaseAmount" ELSE 0 END) AS total_purchases,
-        SUM(CASE WHEN p."IDSalesUser" = COALESCE(p."IDPurchaseUser", p."IDSalesUser") THEN p."SalesAmount" ELSE 0 END) AS total_sales
-    FROM "PressRoom" p
-    GROUP BY COALESCE(p."IDPurchaseUser", p."IDSalesUser")
+    SELECT uid,
+        SUM(purchases) AS total_purchases,
+        SUM(sales) AS total_sales
+    FROM (
+        SELECT "IDPurchaseUser" AS uid, "PurchaseAmount" AS purchases, 0 AS sales
+        FROM "PressRoom"
+        WHERE "IDPurchaseUser" IS NOT NULL
+        UNION ALL
+        SELECT "IDSalesUser" AS uid, 0 AS purchases, "SalesAmount" AS sales
+        FROM "PressRoom"
+        WHERE "IDSalesUser" IS NOT NULL
+    ) sub
+    GROUP BY uid
 ) tx ON tx.uid = u."IDUser"
 LEFT JOIN (
     SELECT "IDUser", SUM("Amount") AS total_money
