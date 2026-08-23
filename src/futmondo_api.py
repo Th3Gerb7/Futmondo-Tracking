@@ -89,7 +89,6 @@ def get_pressroom(token: str, userid: str) -> list[dict]:
         if not news:
             break
 
-        oldest_id = ""
         new_count = 0
         for item in news:
             tx_id = item.get("_id", "")
@@ -97,11 +96,11 @@ def get_pressroom(token: str, userid: str) -> list[dict]:
                 seen_ids.add(tx_id)
                 all_news.append(item)
                 new_count += 1
-                oldest_id = tx_id
 
-        if new_count == 0:
+        last_id = news[-1].get("_id", "")
+        if new_count == 0 or not last_id or last_id == cursor:
             break
-        cursor = oldest_id
+        cursor = last_id
 
     return all_news
 
@@ -122,7 +121,6 @@ def get_news(token: str, userid: str) -> list[dict]:
         if not news:
             break
 
-        oldest_id = ""
         new_count = 0
         for item in news:
             nid = item.get("_id", "")
@@ -130,11 +128,11 @@ def get_news(token: str, userid: str) -> list[dict]:
                 seen_ids.add(nid)
                 all_news.append(item)
                 new_count += 1
-                oldest_id = nid
 
-        if new_count == 0:
+        last_id = news[-1].get("_id", "")
+        if new_count == 0 or not last_id or last_id == cursor:
             break
-        cursor = oldest_id
+        cursor = last_id
 
     return all_news
 
