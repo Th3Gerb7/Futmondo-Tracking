@@ -77,6 +77,15 @@ jobs:
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
         run: python -m src.diagnose_championship
 
+      - name: Diagnosticar matching por team_id vs nombre
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.diagnose_teamid_match
+
       - name: Diagnosticar paginacion pressroom
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

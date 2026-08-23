@@ -13,16 +13,22 @@ def _normalize(name: str | None) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower().strip()
 
 
-def _build_user_lookup(users: list[dict]) -> dict[str, str]:
+def _build_name_lookup(users: list[dict]) -> dict[str, str]:
     return {_normalize(u["NameInGame"]): u["IDUser"] for u in users if u.get("NameInGame")}
 
 
-def sync(news: list[dict]) -> None:
+def _build_teamid_lookup(teams: list[dict]) -> dict[str, str]:
+    """Map team _id (userteam) → userid from the API teams list."""
+    return {t["_id"]: t["userid"] for t in teams if t.get("_id") and t.get("userid")}
+
+
+def sync(news: list[dict], teams: list[dict] | None = None) -> None:
     db = get_client()
     now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
 
     users = db.table("LeagueUsers").select("IDUser, NameInGame").execute().data or []
-    lookup = _build_user_lookup(users)
+    name_lookup = _build_name_lookup(users)
+    teamid_lookup = _build_teamid_lookup(teams) if teams else {}
 
     api_ids = set()
     rows = []
@@ -35,12 +41,18 @@ def sync(news: list[dict]) -> None:
         api_ids.add(tx_id)
 
         player = item.get("_player", {}).get("name")
-        buyer_name = item.get("_buyer", {}).get("name")
-        seller_name = item.get("_seller", {}).get("name")
+        buyer_obj = item.get("_buyer", {})
+        seller_obj = item.get("_seller", {})
+        buyer_name = buyer_obj.get("name")
+        seller_name = seller_obj.get("name")
         price = item.get("price", 0)
 
-        buyer_id = lookup.get(_normalize(buyer_name))
-        seller_id = lookup.get(_normalize(seller_name))
+        buyer_id = name_lookup.get(_normalize(buyer_name))
+        if not buyer_id:
+            buyer_id = teamid_lookup.get(buyer_obj.get("_id", ""))
+        seller_id = name_lookup.get(_normalize(seller_name))
+        if not seller_id:
+            seller_id = teamid_lookup.get(seller_obj.get("_id", ""))
 
         if buyer_id and seller_id:
             tx_type = "Compra-Venta"

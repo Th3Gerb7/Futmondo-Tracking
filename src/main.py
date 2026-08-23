@@ -38,7 +38,7 @@ def run():
 
     _step("5/6 Transacciones")
     news = futmondo_api.get_pressroom(token, userid)
-    sync_pressroom.sync(news)
+    sync_pressroom.sync(news, teams)
 
     _step("6/6 Repartos dinero")
     locker_news = futmondo_api.get_news(token, userid)
