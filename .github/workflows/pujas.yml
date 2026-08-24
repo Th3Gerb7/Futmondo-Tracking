@@ -1,0 +1,33 @@
+name: Análisis Pujas
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: futmondo-pujas
+  cancel-in-progress: true
+
+jobs:
+  pujas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Análisis de pujas máximas
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.diagnose_pujas
