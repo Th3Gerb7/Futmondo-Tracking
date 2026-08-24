@@ -47,12 +47,12 @@ def sync(news: list[dict], teams: list[dict] | None = None) -> None:
         seller_name = seller_obj.get("name")
         price = item.get("price", 0)
 
-        buyer_id = name_lookup.get(_normalize(buyer_name))
+        buyer_id = teamid_lookup.get(buyer_obj.get("_id", ""))
         if not buyer_id:
-            buyer_id = teamid_lookup.get(buyer_obj.get("_id", ""))
-        seller_id = name_lookup.get(_normalize(seller_name))
+            buyer_id = name_lookup.get(_normalize(buyer_name))
+        seller_id = teamid_lookup.get(seller_obj.get("_id", ""))
         if not seller_id:
-            seller_id = teamid_lookup.get(seller_obj.get("_id", ""))
+            seller_id = name_lookup.get(_normalize(seller_name))
 
         if buyer_id and seller_id:
             tx_type = "Compra-Venta"
