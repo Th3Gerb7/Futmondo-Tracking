@@ -1,5 +1,7 @@
-"""Insert the missing Mario Soriano purchase transaction that was deleted
-by the old sync_pressroom delete logic and cannot be recovered from the API."""
+"""Insert recovered transactions that were deleted by the old sync_pressroom
+delete logic and cannot be recovered from the API.
+
+Idempotent: checks for existing transactions before inserting."""
 
 import sys
 from datetime import datetime
@@ -8,93 +10,82 @@ from src.supabase_client import get_client
 
 MADRID = pytz.timezone("Europe/Madrid")
 
-GERMAN_FDEZ_ID = "610386f21a3e3f2c97060c03"
-
-MISSING_TX = {
-    "IDTransaction": "recovered_mario_soriano_purchase",
-    "TransactionDate": "2026-08-09T12:00:00.000Z",
-    "FootballPlayer": "Mario Soriano",
-    "IDPurchaseUser": GERMAN_FDEZ_ID,
-    "IDSalesUser": None,
-    "PurchaseAmount": -30999777,
-    "SalesAmount": 0,
-    "TransactionType": "Compra",
-    "UpdatedAt": datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S"),
-}
+RECOVERED_TRANSACTIONS = [
+    {
+        "IDTransaction": "recovered_mario_soriano_purchase",
+        "TransactionDate": "2026-08-09T12:00:00.000Z",
+        "FootballPlayer": "Mario Soriano",
+        "IDPurchaseUser": "610386f21a3e3f2c97060c03",  # German Fdez
+        "IDSalesUser": None,
+        "PurchaseAmount": -30999777,
+        "SalesAmount": 0,
+        "TransactionType": "Compra",
+    },
+    {
+        "IDTransaction": "recovered_mourino_purchase_albert",
+        "TransactionDate": "2026-08-09T12:00:00.000Z",
+        "FootballPlayer": "Mouriño",
+        "IDPurchaseUser": "693fe892f495ac343647406e",  # Albert Viladegut
+        "IDSalesUser": None,
+        "PurchaseAmount": -23406406,
+        "SalesAmount": 0,
+        "TransactionType": "Compra",
+    },
+    {
+        "IDTransaction": "recovered_bellerin_purchase_ivan",
+        "TransactionDate": "2026-08-09T12:00:00.000Z",
+        "FootballPlayer": "Bellerin",
+        "IDPurchaseUser": "684b04144e95775f1fce5faa",  # Ivan burkiewicz
+        "IDSalesUser": None,
+        "PurchaseAmount": -13200000,
+        "SalesAmount": 0,
+        "TransactionType": "Compra",
+    },
+]
 
 
 def main():
     db = get_client()
+    now = datetime.now(MADRID).strftime("%Y-%m-%d %H:%M:%S")
+    inserted = 0
 
-    existing = (
-        db.table("PressRoom")
-        .select("IDTransaction")
-        .eq("IDTransaction", MISSING_TX["IDTransaction"])
-        .execute()
-        .data
-    )
-    if existing:
-        print("Transaction already exists — skipping insert.")
-        return 0
+    for tx in RECOVERED_TRANSACTIONS:
+        player = tx["FootballPlayer"]
+        user_id = tx["IDPurchaseUser"]
+        tx_id = tx["IDTransaction"]
 
-    german_purchases = (
-        db.table("PressRoom")
-        .select("IDTransaction, FootballPlayer, PurchaseAmount")
-        .eq("IDPurchaseUser", GERMAN_FDEZ_ID)
-        .ilike("FootballPlayer", "%Mario Soriano%")
-        .execute()
-        .data
-        or []
-    )
-    if german_purchases:
-        print("A Mario Soriano purchase for German Fdez already exists:")
-        for r in german_purchases:
-            print(f"  {r['IDTransaction']} | {r['FootballPlayer']} | {r['PurchaseAmount']}")
-        print("Skipping insert to avoid duplicate.")
-        return 0
+        existing = (
+            db.table("PressRoom")
+            .select("IDTransaction")
+            .eq("IDTransaction", tx_id)
+            .execute()
+            .data
+        )
+        if existing:
+            print(f"[SKIP] {player} ({tx_id}) — already exists")
+            continue
 
-    print("Inserting missing transaction:")
-    for k, v in MISSING_TX.items():
-        print(f"  {k}: {v}")
+        already_purchased = (
+            db.table("PressRoom")
+            .select("IDTransaction, FootballPlayer, PurchaseAmount")
+            .eq("IDPurchaseUser", user_id)
+            .ilike("FootballPlayer", f"%{player}%")
+            .execute()
+            .data
+            or []
+        )
+        if already_purchased:
+            print(f"[SKIP] {player} for user {user_id} — purchase already exists:")
+            for r in already_purchased:
+                print(f"  {r['IDTransaction']} | {r['FootballPlayer']} | {r['PurchaseAmount']}")
+            continue
 
-    db.table("PressRoom").insert(MISSING_TX).execute()
-    print("\nInsert OK.")
+        row = {**tx, "UpdatedAt": now}
+        print(f"[INSERT] {player} for user {user_id}: {tx['PurchaseAmount']:,}")
+        db.table("PressRoom").insert(row).execute()
+        inserted += 1
 
-    balance_check = (
-        db.table("PressRoom")
-        .select("PurchaseAmount")
-        .eq("IDPurchaseUser", GERMAN_FDEZ_ID)
-        .execute()
-        .data
-        or []
-    )
-    total_purchases = sum(r["PurchaseAmount"] or 0 for r in balance_check)
-
-    sales_check = (
-        db.table("PressRoom")
-        .select("SalesAmount")
-        .eq("IDSalesUser", GERMAN_FDEZ_ID)
-        .execute()
-        .data
-        or []
-    )
-    total_sales = sum(r["SalesAmount"] or 0 for r in sales_check)
-
-    money = (
-        db.table("MoneyEvents")
-        .select("Amount")
-        .eq("IDUser", GERMAN_FDEZ_ID)
-        .execute()
-        .data
-        or []
-    )
-    total_money = sum(e["Amount"] or 0 for e in money)
-
-    balance = 200_000_000 + total_purchases + total_sales + total_money
-    print(f"\nBalance after fix: {balance:,.0f}")
-    print(f"Expected:          ~18,341,729")
-    print(f"Difference:        {balance - 18_341_729:,.0f}")
-
+    print(f"\nInserted {inserted} recovered transaction(s).")
     return 0
 
 
