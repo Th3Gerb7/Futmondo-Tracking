@@ -37,6 +37,7 @@ src/
 ├── sync_money_events.py   # Sync repartos de dinero → MoneyEvents
 ├── verify_pressroom.py    # Verificación API vs Supabase
 ├── audit_balance.py       # Auditoría de balances (calculado vs vista SQL)
+├── auto_recover.py        # Auto-recuperación de compras faltantes (cross-ref SquadPlayers vs PressRoom)
 ├── diagnose_pujas.py      # Análisis de pujas máximas y capacidad de puja
 ├── diagnose_*.py          # Otros diagnósticos (news, balance, matching, pagination, championship)
 ```
@@ -51,8 +52,9 @@ Se ejecuta como `python -m src.main`. Pasos secuenciales:
 4. **Plantillas** → Por cada equipo, `futmondo_api.get_roster()` → `sync_squads.sync()` → upsert en `SquadPlayers`
 5. **Transacciones** → `futmondo_api.get_pressroom()` → `sync_pressroom.sync()` → upsert en `PressRoom`
 6. **Repartos dinero** → `futmondo_api.get_news()` → `sync_money_events.sync()` → insert en `MoneyEvents`
+7. **Auto-recuperación** → `auto_recover.recover()` → cross-ref SquadPlayers vs PressRoom, inserta compras faltantes
 
-Todos los syncs hacen upsert de datos actuales y eliminan registros que ya no existen en la API (excepto MoneyEvents que solo inserta nuevos).
+Todos los syncs hacen upsert de datos actuales (PressRoom nunca elimina registros existentes, MoneyEvents solo inserta nuevos). El paso 7 detecta automáticamente jugadores en plantilla sin transacción de compra y los recupera usando el BuyPrice de SquadPlayers.
 
 ## API de Futmondo (`src/futmondo_api.py`)
 
