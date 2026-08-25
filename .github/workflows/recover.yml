@@ -27,6 +27,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
         run: python -m src.insert_missing_tx
 
       - name: Diagnosticar transacciones faltantes
