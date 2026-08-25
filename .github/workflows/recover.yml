@@ -23,6 +23,12 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Insertar transaccion faltante Mario Soriano
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python -m src.insert_missing_tx
+
       - name: Diagnosticar transacciones faltantes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
