@@ -23,14 +23,14 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Recuperar transacciones
+      - name: Diagnosticar transacciones faltantes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
           FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
-        run: python -m src.recover_pressroom
+        run: python -m src.diagnose_missing
 
       - name: Auditar balances
         env:
