@@ -2,7 +2,7 @@ import sys
 import time
 from datetime import datetime
 import pytz
-from src import futmondo_api, sync_teams, sync_pressroom, sync_squads, sync_money_events
+from src import futmondo_api, sync_teams, sync_pressroom, sync_squads, sync_money_events, auto_recover
 from src.supabase_client import get_client
 
 MADRID = pytz.timezone("Europe/Madrid")
@@ -16,11 +16,11 @@ def run():
     t0 = time.monotonic()
     print(f"=== Futmondo Sync - {datetime.now(MADRID).strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
-    _step("1/6 Login")
+    _step("1/7 Login")
     token, userid = futmondo_api.login()
     print("OK")
 
-    _step("2/6 Token > Supabase")
+    _step("2/7 Token > Supabase")
     db = get_client()
     db.table("AccessToken").upsert({
         "ID": "futmondo_session",
@@ -29,20 +29,23 @@ def run():
     }).execute()
     print("OK")
 
-    _step("3/6 Equipos")
+    _step("3/7 Equipos")
     teams = futmondo_api.get_teams(token, userid)
     sync_teams.sync(teams)
 
-    _step("4/6 Plantillas")
+    _step("4/7 Plantillas")
     sync_squads.sync(token, userid, teams)
 
-    _step("5/6 Transacciones")
+    _step("5/7 Transacciones")
     news = futmondo_api.get_pressroom(token, userid)
     sync_pressroom.sync(news, teams)
 
-    _step("6/6 Repartos dinero")
+    _step("6/7 Repartos dinero")
     locker_news = futmondo_api.get_news(token, userid)
     sync_money_events.sync(locker_news)
+
+    _step("7/7 Auto-recuperación")
+    auto_recover.recover()
 
     elapsed = time.monotonic() - t0
     print(f"\n=== Completado en {elapsed:.1f}s ===")

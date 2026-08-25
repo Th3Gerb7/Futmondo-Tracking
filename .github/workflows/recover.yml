@@ -23,14 +23,14 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Insertar transacciones recuperadas manualmente
+      - name: Auto-recuperar transacciones faltantes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
           FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
-        run: python -m src.insert_missing_tx
+        run: python -m src.auto_recover
 
       - name: Diagnostico completo API vs Supabase por IDs
         env:

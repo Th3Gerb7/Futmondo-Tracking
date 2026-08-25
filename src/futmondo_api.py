@@ -106,7 +106,7 @@ def _paginate_pressroom(token: str, userid: str) -> list[dict]:
     return all_news
 
 
-def get_pressroom(token: str, userid: str, passes: int = 3) -> list[dict]:
+def get_pressroom(token: str, userid: str, passes: int = 5) -> list[dict]:
     """Fetch pressroom with multiple passes to maximize coverage.
 
     The API's cursor pagination is non-deterministic and may return
@@ -128,7 +128,7 @@ def get_pressroom(token: str, userid: str, passes: int = 3) -> list[dict]:
         if i > 0 and new > 0:
             print(f"  [pressroom pass {i+1}] {new} transacciones nuevas encontradas")
         if i < passes - 1:
-            time.sleep(1)
+            time.sleep(2)
 
     return list(merged.values())
 

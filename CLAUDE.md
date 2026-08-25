@@ -30,13 +30,14 @@ src/
 ├── config.py              # Carga env vars, valida que existan
 ├── supabase_client.py     # Singleton del cliente Supabase (service_role)
 ├── futmondo_api.py        # Cliente API Futmondo (login, teams, pressroom, news, roster)
-├── main.py                # Orquestador del sync (6 pasos secuenciales)
+├── main.py                # Orquestador del sync (7 pasos secuenciales)
 ├── sync_teams.py          # Sync equipos → LeagueUsers
 ├── sync_squads.py         # Sync plantillas → SquadPlayers
 ├── sync_pressroom.py      # Sync transacciones → PressRoom
 ├── sync_money_events.py   # Sync repartos de dinero → MoneyEvents
 ├── verify_pressroom.py    # Verificación API vs Supabase
 ├── audit_balance.py       # Auditoría de balances (calculado vs vista SQL)
+├── auto_recover.py        # Auto-recuperación de compras faltantes (cross-ref SquadPlayers vs PressRoom)
 ├── diagnose_pujas.py      # Análisis de pujas máximas y capacidad de puja
 ├── diagnose_*.py          # Otros diagnósticos (news, balance, matching, pagination, championship)
 ```
@@ -51,8 +52,9 @@ Se ejecuta como `python -m src.main`. Pasos secuenciales:
 4. **Plantillas** → Por cada equipo, `futmondo_api.get_roster()` → `sync_squads.sync()` → upsert en `SquadPlayers`
 5. **Transacciones** → `futmondo_api.get_pressroom()` → `sync_pressroom.sync()` → upsert en `PressRoom`
 6. **Repartos dinero** → `futmondo_api.get_news()` → `sync_money_events.sync()` → insert en `MoneyEvents`
+7. **Auto-recuperación** → `auto_recover.recover()` → cross-ref SquadPlayers vs PressRoom, inserta compras faltantes
 
-Todos los syncs hacen upsert de datos actuales y eliminan registros que ya no existen en la API (excepto MoneyEvents que solo inserta nuevos).
+Todos los syncs hacen upsert de datos actuales (PressRoom nunca elimina registros existentes, MoneyEvents solo inserta nuevos). El paso 7 detecta automáticamente jugadores en plantilla sin transacción de compra y los recupera usando el BuyPrice de SquadPlayers.
 
 ## API de Futmondo (`src/futmondo_api.py`)
 
@@ -80,6 +82,8 @@ Todas las llamadas son POST con esta estructura:
 ### Paginación
 
 Pressroom y News usan paginación por cursor: `query.from = last_id`. Se itera hasta que no hay más resultados o se repite el cursor. Se usa `seen_ids` para deduplicar.
+
+**Importante**: La paginación de la API es **no determinista** — distintas llamadas pueden devolver subconjuntos diferentes de transacciones. Por eso `get_pressroom()` hace **5 pasadas** (con 2s de espera entre ellas) y unifica resultados para maximizar cobertura. Aun así, algunas transacciones antiguas pueden no aparecer nunca — el sistema de auto-recuperación (paso 7 del sync) compensa esto.
 
 ## Tablas en Supabase
 
@@ -117,9 +121,20 @@ Transacciones del mercado (compras a Futmondo, ventas a Futmondo, y compra-venta
 - `Venta`: Usuario vende al mercado de Futmondo (solo IDSalesUser)
 - `Desconocida`: No se pudo identificar ningún usuario
 
+**Integridad de datos**:
+- PressRoom es un **ledger histórico**: NUNCA se eliminan transacciones existentes.
+- El sync solo hace **upsert** (inserta nuevas, actualiza existentes por `IDTransaction`).
+- Cada transacción queda vinculada al usuario por su **IDUser estable**, no por nombre.
+
 **Matching de usuarios en PressRoom** (`sync_pressroom.py`):
 - Prioridad 1: Team ID → se mapea `_buyer._id` / `_seller._id` (team ID de la API) al `userid` via la tabla de equipos. Este método es ESTABLE y fiable.
 - Prioridad 2 (fallback): Name matching → normalización Unicode + casefold del nombre. Solo se usa si el team ID no resuelve.
+
+**Auto-recuperación** (`auto_recover.py`):
+- Cross-referencia SquadPlayers vs PressRoom por nombre de jugador normalizado.
+- Si un jugador está en la plantilla de un usuario pero no tiene transacción de compra, crea una automáticamente usando el `BuyPrice` de SquadPlayers.
+- IDs auto-generados con prefijo `auto_` para distinguirlos de transacciones de la API.
+- Idempotente: verifica existencia por `IDTransaction` antes de insertar.
 
 ### `MoneyEvents`
 Repartos de dinero por jornada, ranking, MVP, dream team, etc.
@@ -198,8 +213,8 @@ Vista SQL calculada (no es tabla). Muestra el estado financiero de cada usuario.
 ### `sync.yml` — Sync principal
 - **Cron**: 06:30 y 21:30 UTC (08:30 y 23:30 Madrid en verano)
 - **Manual**: workflow_dispatch
-- **Ejecuta**: `python -m src.main` (los 6 pasos)
-- **Timeout**: 5 minutos
+- **Ejecuta**: `python -m src.main` (los 7 pasos, incluida auto-recuperación)
+- **Timeout**: 8 minutos
 
 ### `pujas.yml` — Análisis de pujas
 - **Solo manual**: workflow_dispatch
@@ -211,6 +226,11 @@ Vista SQL calculada (no es tabla). Muestra el estado financiero de cada usuario.
 - **Solo manual**: workflow_dispatch (con opción de ejecutar sync primero)
 - **Ejecuta**: `verify_pressroom` + `audit_balance`
 - **Output**: Comparación API vs DB, verificación de balances calculados vs vista SQL
+
+### `recover.yml` — Recuperación + Diagnóstico completo
+- **Solo manual**: workflow_dispatch
+- **Ejecuta**: `auto_recover` → `diagnose_full` (API vs DB por IDs) → `diagnose_all_missing` (plantillas vs compras) → `audit_balance`
+- **Timeout**: 10 minutos
 
 ### `diagnose.yml` — Diagnósticos completos
 - **Solo manual**: workflow_dispatch
@@ -257,5 +277,6 @@ Dado que el proxy bloquea conexiones directas a Supabase, para obtener datos fre
 - Timezone: `Europe/Madrid` para timestamps
 - Todos los imports de Supabase van via `src.supabase_client.get_client()`
 - Los scripts diagnóstico se ejecutan como `python -m src.diagnose_<nombre>`
-- Cada sync module tiene una función `sync()` que recibe datos de la API y hace upsert/delete en Supabase
-- Todos los syncs imprimen resumen: `"X upserted, Y eliminados"`
+- Cada sync module tiene una función `sync()` que recibe datos de la API y hace upsert en Supabase (NUNCA delete en PressRoom)
+- Todos los syncs imprimen resumen al finalizar
+- `auto_recover.py` se ejecuta como paso final de cada sync para detectar y corregir discrepancias automáticamente
