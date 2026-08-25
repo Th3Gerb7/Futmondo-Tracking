@@ -6,10 +6,13 @@ BuyPrice from SquadPlayers. This handles the case where the Futmondo API's
 non-deterministic pagination drops old transactions.
 """
 
+import re
 import unicodedata
 from datetime import datetime
 import pytz
 from src.supabase_client import get_client
+
+_MONGO_ID = re.compile(r"^[0-9a-f]{24}$")
 
 MADRID = pytz.timezone("Europe/Madrid")
 
@@ -55,8 +58,12 @@ def _has_purchase(player_name: str, purchase_names: list[str]) -> bool:
     return False
 
 
+def _is_api_id(tx_id: str) -> bool:
+    return bool(_MONGO_ID.match(tx_id))
+
+
 def cleanup_duplicates() -> int:
-    """Remove auto-recovered transactions that duplicate real API transactions."""
+    """Remove system-generated transactions that duplicate real API transactions."""
     db = get_client()
 
     all_tx = (
@@ -68,10 +75,10 @@ def cleanup_duplicates() -> int:
         or []
     )
 
-    auto_txs = [t for t in all_tx if t["IDTransaction"].startswith("auto_")]
-    real_txs = [t for t in all_tx if not t["IDTransaction"].startswith("auto_")]
+    synthetic_txs = [t for t in all_tx if not _is_api_id(t["IDTransaction"])]
+    real_txs = [t for t in all_tx if _is_api_id(t["IDTransaction"])]
 
-    if not auto_txs:
+    if not synthetic_txs:
         return 0
 
     real_by_user: dict[str, list[str]] = {}
@@ -82,7 +89,7 @@ def cleanup_duplicates() -> int:
             real_by_user.setdefault(uid, []).append(pname)
 
     duplicates = []
-    for atx in auto_txs:
+    for atx in synthetic_txs:
         uid = atx.get("IDPurchaseUser", "")
         pname = atx.get("FootballPlayer", "")
         if uid and pname and _has_purchase(pname, real_by_user.get(uid, [])):
