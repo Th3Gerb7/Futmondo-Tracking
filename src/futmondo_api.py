@@ -73,7 +73,8 @@ def get_teams(token: str, userid: str) -> list[dict]:
     return teams
 
 
-def get_pressroom(token: str, userid: str) -> list[dict]:
+def _paginate_pressroom(token: str, userid: str) -> list[dict]:
+    """Single pagination pass through the pressroom API."""
     all_news = []
     seen_ids: set[str] = set()
     cursor = ""
@@ -103,6 +104,33 @@ def get_pressroom(token: str, userid: str) -> list[dict]:
         cursor = last_id
 
     return all_news
+
+
+def get_pressroom(token: str, userid: str, passes: int = 3) -> list[dict]:
+    """Fetch pressroom with multiple passes to maximize coverage.
+
+    The API's cursor pagination is non-deterministic and may return
+    different subsets on each call. Multiple passes with a union of
+    results reduces the chance of missing transactions.
+    """
+    import time
+
+    merged: dict[str, dict] = {}
+
+    for i in range(passes):
+        batch = _paginate_pressroom(token, userid)
+        new = 0
+        for item in batch:
+            tx_id = item.get("_id", "")
+            if tx_id and tx_id not in merged:
+                merged[tx_id] = item
+                new += 1
+        if i > 0 and new > 0:
+            print(f"  [pressroom pass {i+1}] {new} transacciones nuevas encontradas")
+        if i < passes - 1:
+            time.sleep(1)
+
+    return list(merged.values())
 
 
 def get_news(token: str, userid: str) -> list[dict]:

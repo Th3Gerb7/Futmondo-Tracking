@@ -32,14 +32,14 @@ jobs:
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
         run: python -m src.insert_missing_tx
 
-      - name: Diagnosticar transacciones faltantes
+      - name: Diagnosticar transacciones faltantes TODOS los usuarios
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
           FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
           CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
-        run: python -m src.diagnose_missing
+        run: python -m src.diagnose_all_missing
 
       - name: Auditar balances
         env:
