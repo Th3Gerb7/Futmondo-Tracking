@@ -133,7 +133,8 @@ def get_pressroom(token: str, userid: str, passes: int = 5) -> list[dict]:
     return list(merged.values())
 
 
-def get_news(token: str, userid: str) -> list[dict]:
+def _paginate_news(token: str, userid: str) -> list[dict]:
+    """Single pagination pass through the news API."""
     all_news = []
     seen_ids: set[str] = set()
     cursor = ""
@@ -163,6 +164,33 @@ def get_news(token: str, userid: str) -> list[dict]:
         cursor = last_id
 
     return all_news
+
+
+def get_news(token: str, userid: str, passes: int = 5) -> list[dict]:
+    """Fetch news with multiple passes to maximize coverage.
+
+    The API's cursor pagination is non-deterministic and may return
+    different subsets on each call. Multiple passes with a union of
+    results reduces the chance of missing events.
+    """
+    import time
+
+    merged: dict[str, dict] = {}
+
+    for i in range(passes):
+        batch = _paginate_news(token, userid)
+        new = 0
+        for item in batch:
+            nid = item.get("_id", "")
+            if nid and nid not in merged:
+                merged[nid] = item
+                new += 1
+        if i > 0 and new > 0:
+            print(f"  [news pass {i+1}] {new} news nuevas encontradas")
+        if i < passes - 1:
+            time.sleep(2)
+
+    return list(merged.values())
 
 
 def get_roster(token: str, userid: str, userteam_id: str) -> list[dict]:
