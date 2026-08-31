@@ -5,6 +5,8 @@ from src.supabase_client import get_client
 
 MADRID = pytz.timezone("Europe/Madrid")
 
+MONEY_STYPS = {"customize", "bonus"}
+
 
 def _normalize(s: str) -> str:
     return unicodedata.normalize("NFKD", s).casefold().strip()
@@ -14,6 +16,25 @@ HISTORICAL_NAMES: dict[str, str] = {
     _normalize("\U0001f468\U0001f3fb‍✈️IL CONSTRUTORE WL"): "5a60ebbc7f21925d0b1b70d6",  # Marc Galvez
     _normalize("Ivan burkiewicz"): "684b04144e95775f1fce5faa",  # Ivan burkiewicz
 }
+
+
+def _extract_event(item: dict) -> tuple[str, int] | None:
+    """Extract (team_name, amount) from a money event regardless of styp."""
+    data = item.get("data", {})
+    styp = item.get("styp", "")
+
+    if styp == "customize":
+        team_name = data.get("name", "")
+        amount = data.get("money", 0)
+        if team_name and amount:
+            return team_name, amount
+    elif styp == "bonus":
+        team_name = data.get("to", "")
+        amount = data.get("quantity", 0)
+        if team_name and amount:
+            return team_name, amount
+
+    return None
 
 
 def sync(news: list[dict]) -> None:
@@ -27,7 +48,7 @@ def sync(news: list[dict]) -> None:
         if name:
             name_to_id[_normalize(name)] = u["IDUser"]
 
-    customize = [n for n in news if n.get("styp") == "customize"]
+    money_events = [n for n in news if n.get("styp") in MONEY_STYPS]
 
     existing = db.table("MoneyEvents").select("IDEvent").execute().data or []
     existing_ids = {r["IDEvent"] for r in existing}
@@ -35,14 +56,15 @@ def sync(news: list[dict]) -> None:
     rows = []
     unmatched = []
 
-    for item in customize:
+    for item in money_events:
         event_id = item.get("_id")
         if not event_id or event_id in existing_ids:
             continue
 
-        data = item.get("data", {})
-        team_name = data.get("name", "")
-        amount = data.get("money", 0)
+        extracted = _extract_event(item)
+        if not extracted:
+            continue
+        team_name, amount = extracted
 
         norm = _normalize(team_name)
         user_id = name_to_id.get(norm)
@@ -65,7 +87,7 @@ def sync(news: list[dict]) -> None:
             "EventDate": item.get("created"),
             "IDUser": user_id,
             "Amount": amount,
-            "EventType": "customize",
+            "EventType": item.get("styp", "unknown"),
             "Description": item.get("txt", ""),
             "UpdatedAt": now,
         })
