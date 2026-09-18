@@ -1,15 +1,73 @@
-"""Explore Futmondo API for bid/offer data — Phase 2.
+"""Explore Futmondo API — Phase 3: Platform Offers.
 
-Focused on finding cancelled/rejected bids, specifically a Vinicius bid.
-Examines pressroom bids field, probes notification/activity endpoints,
-and searches for player-specific offer data.
+Futmondo makes automated buy offers TO users for their players.
+Users can accept (sale appears in pressroom) or reject (no record).
+This script probes for where rejected/pending platform offers are stored.
 """
 
 import sys
 import json
 import time
-from src.futmondo_api import login, get_teams, get_pressroom, _post
+import requests
+from src.futmondo_api import login, get_teams, get_roster, _post, _get_session, BASE_URL
 from src.config import CHAMPIONSHIP_ID
+
+
+def raw_post(path, token, userid, query):
+    """POST that returns the FULL response JSON, not just answer."""
+    body = {
+        "header": {"token": token, "userid": userid},
+        "query": query,
+        "answer": {},
+    }
+    resp = _get_session().post(f"{BASE_URL}{path}", json=body, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def probe(label, path, token, userid, query, show_full=False):
+    """Try an endpoint and print results if it responds."""
+    try:
+        full = raw_post(path, token, userid, query)
+        answer = full.get("answer", {})
+
+        if isinstance(answer, dict) and answer.get("error"):
+            return None
+
+        answer_str = json.dumps(answer, indent=2, ensure_ascii=False)
+        if isinstance(answer, dict):
+            keys = sorted(answer.keys())
+        elif isinstance(answer, list):
+            keys = f"list[{len(answer)}]"
+        else:
+            keys = type(answer).__name__
+
+        has_content = False
+        if isinstance(answer, list) and len(answer) > 0:
+            has_content = True
+        elif isinstance(answer, dict):
+            for k, v in answer.items():
+                if isinstance(v, list) and len(v) > 0:
+                    has_content = True
+                    break
+                if isinstance(v, dict) and len(v) > 0:
+                    has_content = True
+                    break
+
+        if has_content or show_full:
+            print(f"\n  [HIT!] {label}: {path}")
+            print(f"    Keys: {keys}")
+            print(f"    Response: {answer_str[:5000]}")
+            if show_full:
+                full_str = json.dumps(full, indent=2, ensure_ascii=False)
+                print(f"    FULL: {full_str[:3000]}")
+            return answer
+        else:
+            print(f"  [empty] {label}: {path} -> {keys}")
+            return answer
+    except Exception as e:
+        print(f"  [ERR] {label}: {path} -> {e}")
+        return None
 
 
 def explore():
@@ -21,182 +79,314 @@ def explore():
     my_team_id = my_team.get("teamid") or my_team.get("_id") if my_team else None
     print(f"[OK] Mi equipo: {my_team.get('teamname')} (team_id={my_team_id})")
 
-    # =========================================================
-    # 1. Scan ALL pressroom for items with non-empty "bids"
-    # =========================================================
-    print("\n" + "=" * 80)
-    print("1. PRESSROOM COMPLETA — buscar transacciones con bids no vacíos")
-    print("=" * 80)
+    # Get my roster to have player IDs
+    print("\n--- Mi plantilla ---")
+    roster = get_roster(token, userid, my_team_id)
+    print(f"Jugadores en plantilla: {len(roster)}")
+    player_ids = []
+    for p in roster[:5]:
+        pid = p.get("id", "")
+        pname = p.get("name", "")
+        print(f"  {pname} (id={pid})")
+        player_ids.append(pid)
 
-    all_pr = get_pressroom(token, userid, passes=3)
-    print(f"\nTotal transacciones pressroom: {len(all_pr)}")
-
-    bids_found = 0
-    vinicius_items = []
-    for item in all_pr:
-        bids = item.get("bids", [])
-        player_name = item.get("_player", {}).get("name", "")
-
-        if bids:
-            bids_found += 1
-            print(f"\n  [BIDS!] {player_name} — {len(bids)} pujas")
-            print(f"    {json.dumps(item, indent=2, ensure_ascii=False)[:2000]}")
-
-        if "vinic" in player_name.lower() or "vini" in player_name.lower():
-            vinicius_items.append(item)
-
-    print(f"\nResumen: {bids_found} transacciones con bids de {len(all_pr)} total")
-
-    if vinicius_items:
-        print(f"\n  [VINICIUS] Encontrado en {len(vinicius_items)} transacción(es):")
-        for v in vinicius_items:
-            print(f"    {json.dumps(v, indent=2, ensure_ascii=False)[:2000]}")
-    else:
-        print("\n  [VINICIUS] No encontrado en pressroom (la puja cancelada no generó transacción)")
+    # Also show full team object for clues
+    print("\n--- Team object completo ---")
+    print(json.dumps(my_team, indent=2, ensure_ascii=False)[:3000])
 
     # =========================================================
-    # 2. Probe notification/activity endpoints
+    # 1. Offer/clause endpoints — different API version prefixes
     # =========================================================
     print("\n" + "=" * 80)
-    print("2. PROBING — endpoints de notificaciones/actividad/pujas")
+    print("1. OFERTAS DE PLATAFORMA — endpoints de ofertas/cláusulas")
     print("=" * 80)
 
-    probe_configs = [
-        # Notifications
-        ("/1/locker/notifications", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/notifications", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/notifications/list", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/user/notifications", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/user/activity", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/user/activity", {"championshipId": CHAMPIONSHIP_ID}),
-        # Locker activity
-        ("/1/locker/activity", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/activity", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/locker/history", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/history", {"championshipId": CHAMPIONSHIP_ID}),
-        # Bids/offers specific
-        ("/1/locker/bids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/bids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/locker/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/locker/negotiations", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/negotiations", {"championshipId": CHAMPIONSHIP_ID}),
-        # Market with team context
-        ("/1/market/mybids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/market/myoffers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/market/pending", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/market/history", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/market/history", {"championshipId": CHAMPIONSHIP_ID}),
-        # Userteam bids
-        ("/1/userteam/bids", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        ("/2/userteam/bids", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        ("/1/userteam/offers", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        ("/2/userteam/offers", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        ("/1/userteam/activity", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        ("/1/userteam/history", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        # Championship offers
-        ("/1/championship/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/championship/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/championship/bids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/championship/negotiations", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/championship/activity", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/championship/market", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/championship/market", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/championship/history", {"championshipId": CHAMPIONSHIP_ID}),
-        # Player-specific
-        ("/1/player/bids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/player/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/player/market", {"championshipId": CHAMPIONSHIP_ID}),
-        # Transfer-specific
-        ("/1/transfer/pending", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/transfer/history", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/transfer/bids", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/transfer/offers", {"championshipId": CHAMPIONSHIP_ID}),
-        # Clauses (seen in team object)
-        ("/1/locker/clauses", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/2/locker/clauses", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/userteam/clauses", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
-        # Wallet/balance history
-        ("/1/locker/wallet", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/locker/balance", {"championshipId": CHAMPIONSHIP_ID}),
-        ("/1/userteam/wallet", {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id}),
+    for ver in ["1", "2", "3", "4", "5"]:
+        for path_suffix in [
+            "locker/offers",
+            "locker/clauses",
+            "locker/negotiations",
+            "locker/pendingoffers",
+            "locker/rejectedoffers",
+            "locker/myoffers",
+            "locker/offersreceived",
+            "locker/offersent",
+            "locker/market",
+            "market/offers",
+            "market/pending",
+            "market/received",
+            "market/rejected",
+            "market/myoffers",
+            "market/negotiations",
+            "market/clauses",
+            "offer/list",
+            "offer/pending",
+            "offer/received",
+            "offer/rejected",
+            "offer/history",
+            "offers/list",
+            "offers/pending",
+            "offers/received",
+            "clause/list",
+            "clause/pending",
+            "clause/active",
+            "clauses/list",
+            "negotiation/list",
+            "negotiations/list",
+        ]:
+            probe(
+                f"v{ver}",
+                f"/{ver}/{path_suffix}",
+                token, userid,
+                {"championshipId": CHAMPIONSHIP_ID},
+            )
+
+    # =========================================================
+    # 2. Userteam-specific offer endpoints
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("2. OFERTAS POR USERTEAM")
+    print("=" * 80)
+
+    for ver in ["1", "2", "3"]:
+        for path_suffix in [
+            "userteam/offers",
+            "userteam/clauses",
+            "userteam/negotiations",
+            "userteam/pendingoffers",
+            "userteam/rejectedoffers",
+            "userteam/offersreceived",
+            "userteam/market",
+            "userteam/offersent",
+        ]:
+            probe(
+                f"v{ver} userteam",
+                f"/{ver}/{path_suffix}",
+                token, userid,
+                {"championshipId": CHAMPIONSHIP_ID, "userteamId": my_team_id},
+            )
+
+    # =========================================================
+    # 3. Championship-level offer endpoints
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("3. OFERTAS A NIVEL CHAMPIONSHIP")
+    print("=" * 80)
+
+    for ver in ["1", "2", "3"]:
+        for path_suffix in [
+            "championship/offers",
+            "championship/clauses",
+            "championship/negotiations",
+            "championship/market",
+            "championship/pendingoffers",
+            "championship/offerslist",
+        ]:
+            probe(
+                f"v{ver} champ",
+                f"/{ver}/{path_suffix}",
+                token, userid,
+                {"championshipId": CHAMPIONSHIP_ID},
+            )
+
+    # =========================================================
+    # 4. Player-specific offer endpoints (using first 3 players)
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("4. OFERTAS POR JUGADOR (primeros 3 de mi plantilla)")
+    print("=" * 80)
+
+    for pid in player_ids[:3]:
+        pname = next((p.get("name") for p in roster if p.get("id") == pid), pid)
+        print(f"\n  --- Jugador: {pname} (id={pid}) ---")
+        for ver in ["1", "2"]:
+            for path_suffix in [
+                "player/offers",
+                "player/clauses",
+                "player/negotiations",
+                "player/market",
+                "player/detail",
+                "player/info",
+                "player/history",
+            ]:
+                result = probe(
+                    f"v{ver} player {pname[:15]}",
+                    f"/{ver}/{path_suffix}",
+                    token, userid,
+                    {"championshipId": CHAMPIONSHIP_ID, "playerId": pid},
+                    show_full=(path_suffix in ["player/detail", "player/info"]),
+                )
+        time.sleep(0.3)
+
+    # =========================================================
+    # 5. Try GET endpoints (some APIs use GET not POST)
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("5. ENDPOINTS GET (por si algunas rutas son GET)")
+    print("=" * 80)
+
+    get_paths = [
+        f"/1/locker/offers?championshipId={CHAMPIONSHIP_ID}",
+        f"/1/market/offers?championshipId={CHAMPIONSHIP_ID}",
+        f"/1/offer/list?championshipId={CHAMPIONSHIP_ID}",
+        f"/2/locker/offers?championshipId={CHAMPIONSHIP_ID}",
+        f"/1/locker/clauses?championshipId={CHAMPIONSHIP_ID}",
+        f"/1/userteam/offers?userteamId={my_team_id}&championshipId={CHAMPIONSHIP_ID}",
     ]
 
-    for path, query in probe_configs:
+    for gpath in get_paths:
         try:
-            answer = _post(path, token, userid, query)
-            answer_str = json.dumps(answer, indent=2, ensure_ascii=False)
-            keys = sorted(answer.keys()) if isinstance(answer, dict) else type(answer).__name__
-            print(f"\n  [HIT!] {path}")
-            print(f"    Keys: {keys}")
-            print(f"    Response: {answer_str[:3000]}")
-        except Exception:
-            pass
+            resp = _get_session().get(f"{BASE_URL}{gpath}", timeout=15)
+            status = resp.status_code
+            body = resp.text[:2000]
+            if status == 200:
+                print(f"\n  [GET HIT!] {gpath}")
+                print(f"    Status: {status}")
+                print(f"    Body: {body}")
+            else:
+                print(f"  [GET {status}] {gpath}")
+        except Exception as e:
+            print(f"  [GET ERR] {gpath} -> {e}")
 
     # =========================================================
-    # 3. Search Vinicius in roster to get player ID
+    # 6. Inspect pressroom transaction structure for offer fields
     # =========================================================
     print("\n" + "=" * 80)
-    print("3. BUSCAR VINICIUS EN ROSTERS")
+    print("6. ESTRUCTURA DE TRANSACCIONES — buscar campos de ofertas")
     print("=" * 80)
 
-    from src.futmondo_api import get_roster
-    vini_player_id = None
+    from src.futmondo_api import get_pressroom
+    pr = get_pressroom(token, userid, passes=1)
+    print(f"Total transacciones: {len(pr)}")
 
-    for team in teams:
-        team_id = team.get("teamid") or team.get("_id", "")
-        if not team_id:
-            continue
-        try:
-            roster = get_roster(token, userid, team_id)
-            for player in roster:
-                pname = (player.get("name") or "").lower()
-                if "vinic" in pname or "vini" in pname:
-                    print(f"\n  [FOUND] {player.get('name')} en {team.get('teamname')}")
-                    print(f"    Player ID: {player.get('id')}")
-                    print(f"    Completo: {json.dumps(player, indent=2, ensure_ascii=False)[:1500]}")
-                    vini_player_id = player.get("id")
-        except Exception as e:
-            print(f"  Error roster {team.get('teamname')}: {e}")
-        time.sleep(0.5)
+    all_keys = set()
+    offer_related = []
+    for item in pr:
+        all_keys.update(item.keys())
+        typ = item.get("type", "")
+        styp = item.get("styp", "")
+        if any(k in str(item).lower() for k in ["offer", "oferta", "clause", "reject", "cancel", "rechaz"]):
+            offer_related.append(item)
+
+    print(f"\nTodas las keys encontradas en transacciones:")
+    for k in sorted(all_keys):
+        print(f"  - {k}")
+
+    types_found = set()
+    styps_found = set()
+    for item in pr:
+        if "type" in item:
+            types_found.add(str(item["type"]))
+        if "styp" in item:
+            styps_found.add(str(item["styp"]))
+
+    print(f"\nTypes: {sorted(types_found)}")
+    print(f"Styps: {sorted(styps_found)}")
+
+    if offer_related:
+        print(f"\nTransacciones con mención de 'offer/clause/reject':")
+        for item in offer_related[:5]:
+            print(f"  {json.dumps(item, indent=2, ensure_ascii=False)[:2000]}")
 
     # =========================================================
-    # 4. If we found Vinicius player ID, probe player-specific endpoints
+    # 7. Full news scan — look for offer/rejection subtypes
     # =========================================================
-    if vini_player_id:
-        print("\n" + "=" * 80)
-        print(f"4. PROBING ENDPOINTS ESPECÍFICOS DE VINICIUS (id={vini_player_id})")
-        print("=" * 80)
+    print("\n" + "=" * 80)
+    print("7. NEWS COMPLETAS — buscar subtipos de ofertas/rechazos")
+    print("=" * 80)
 
-        player_probes = [
-            ("/1/player/info", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/2/player/info", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/detail", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/2/player/detail", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/market", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/offers", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/bids", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/history", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/1/player/stats", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-            ("/2/player/stats", {"playerId": vini_player_id, "championshipId": CHAMPIONSHIP_ID}),
-        ]
+    from src.futmondo_api import get_news
+    news = get_news(token, userid, passes=1)
+    print(f"Total news: {len(news)}")
 
-        for path, query in player_probes:
-            try:
-                answer = _post(path, token, userid, query)
-                answer_str = json.dumps(answer, indent=2, ensure_ascii=False)
-                keys = sorted(answer.keys()) if isinstance(answer, dict) else type(answer).__name__
-                print(f"\n  [HIT!] {path}")
-                print(f"    Keys: {keys}")
-                has_vini = "vinic" in answer_str.lower() or "vini" in answer_str.lower()
-                has_bid = "bid" in answer_str.lower() or "offer" in answer_str.lower() or "puja" in answer_str.lower()
-                if has_bid:
-                    print(f"    *** CONTIENE DATOS DE PUJAS ***")
-                print(f"    Response: {answer_str[:5000]}")
-            except Exception:
-                pass
+    news_all_keys = set()
+    news_styps = {}
+    news_types = {}
+    offer_news = []
 
-    print("\n\n=== EXPLORACIÓN FASE 2 COMPLETADA ===")
+    for item in news:
+        news_all_keys.update(item.keys())
+        styp = item.get("styp", "unknown")
+        typ = item.get("type", "unknown")
+        news_styps[styp] = news_styps.get(styp, 0) + 1
+        news_types[typ] = news_types.get(typ, 0) + 1
+
+        item_str = json.dumps(item, ensure_ascii=False).lower()
+        if any(k in item_str for k in ["offer", "oferta", "clause", "reject", "rechaz", "negoci"]):
+            offer_news.append(item)
+
+    print(f"\nKeys en news: {sorted(news_all_keys)}")
+    print(f"Styps: {json.dumps(news_styps, indent=2)}")
+    print(f"Types: {json.dumps(news_types, indent=2)}")
+
+    if offer_news:
+        print(f"\nNews con mención de ofertas/rechazos ({len(offer_news)}):")
+        for item in offer_news[:5]:
+            print(f"  {json.dumps(item, indent=2, ensure_ascii=False)[:2000]}")
+
+    # Show a sample of each styp
+    print("\n--- Ejemplo de cada styp ---")
+    seen_styps = set()
+    for item in news:
+        styp = item.get("styp", "unknown")
+        if styp not in seen_styps:
+            seen_styps.add(styp)
+            print(f"\n  [{styp}]:")
+            print(f"    {json.dumps(item, indent=2, ensure_ascii=False)[:1500]}")
+
+    # =========================================================
+    # 8. Try alternate body structures (some APIs need different format)
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("8. BODY STRUCTURES ALTERNATIVAS")
+    print("=" * 80)
+
+    alt_queries = [
+        ("with teamId", {"championshipId": CHAMPIONSHIP_ID, "teamId": my_team_id}),
+        ("with team_id", {"championshipId": CHAMPIONSHIP_ID, "team_id": my_team_id}),
+        ("with userId", {"championshipId": CHAMPIONSHIP_ID, "userId": userid}),
+        ("with user_id", {"championshipId": CHAMPIONSHIP_ID, "user_id": userid}),
+        ("with type=offer", {"championshipId": CHAMPIONSHIP_ID, "type": "offer"}),
+        ("with type=clause", {"championshipId": CHAMPIONSHIP_ID, "type": "clause"}),
+        ("with status=rejected", {"championshipId": CHAMPIONSHIP_ID, "status": "rejected"}),
+        ("with status=pending", {"championshipId": CHAMPIONSHIP_ID, "status": "pending"}),
+        ("with filter=offers", {"championshipId": CHAMPIONSHIP_ID, "filter": "offers"}),
+        ("with section=offers", {"championshipId": CHAMPIONSHIP_ID, "section": "offers"}),
+    ]
+
+    for label, query in alt_queries:
+        for path in ["/1/locker/pressroom", "/2/locker/pressroom",
+                     "/1/locker/news", "/2/locker/news",
+                     "/1/locker/market", "/2/locker/market"]:
+            probe(f"{label}", path, token, userid, query)
+
+    # =========================================================
+    # 9. Try v3/v4/v5 of core endpoints
+    # =========================================================
+    print("\n" + "=" * 80)
+    print("9. VERSIONES SUPERIORES DE ENDPOINTS CORE")
+    print("=" * 80)
+
+    for ver in ["3", "4", "5"]:
+        for path_suffix in [
+            "locker/pressroom",
+            "locker/news",
+            "locker/market",
+            "championship/teams",
+            "championship/market",
+            "championship/info",
+            "user/info",
+            "user/dashboard",
+            "user/market",
+        ]:
+            probe(
+                f"v{ver}",
+                f"/{ver}/{path_suffix}",
+                token, userid,
+                {"championshipId": CHAMPIONSHIP_ID},
+            )
+
+    print("\n\n=== EXPLORACIÓN FASE 3 COMPLETADA ===")
     return 0
 
 
