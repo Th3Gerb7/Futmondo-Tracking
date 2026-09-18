@@ -16,7 +16,7 @@ def explore():
 
     teams = get_teams(token, userid)
     my_team = next((t for t in teams if t.get("userid") == userid), None)
-    my_team_id = my_team["_id"] if my_team else None
+    my_team_id = my_team.get("_id") if my_team else None
     print(f"[OK] Mi equipo: {my_team.get('teamname')} (team_id={my_team_id})")
     print(f"     Claves del team object: {sorted(my_team.keys()) if my_team else 'N/A'}")
     print(f"     Team completo:\n{json.dumps(my_team, indent=2, ensure_ascii=False)}\n")
