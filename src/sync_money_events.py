@@ -15,6 +15,15 @@ def _normalize(s: str) -> str:
 HISTORICAL_NAMES: dict[str, str] = {
     _normalize("\U0001f468\U0001f3fb‍✈️IL CONSTRUTORE WL"): "5a60ebbc7f21925d0b1b70d6",  # Marc Galvez
     _normalize("Ivan burkiewicz"): "684b04144e95775f1fce5faa",  # Ivan burkiewicz
+    _normalize("palanquitas"): "55d8de28bd8ef59f02dc5c9f",  # Martin
+    _normalize("palanquitas 🕹️⭐"): "55d8de28bd8ef59f02dc5c9f",  # Martin
+    _normalize("Albert"): "693fe892f495ac343647406e",  # Albert Viladegut
+    _normalize("Bilardismo"): "693fe892f495ac343647406e",  # Albert Viladegut
+    _normalize("Mister Sextas Pujas⭐⭐⭐⭐"): "55d76b39ec12c67f08267d38",  # Nachoe95
+    _normalize("Mister Segundas Pujas"): "55d76b39ec12c67f08267d38",  # Nachoe95
+    _normalize("Perdóname Boyé"): "55d8dd73f18b49970234f6e7",  # Fernando Berniola Casorrán
+    _normalize("Luis Romance ⭐️⭐️"): "55d8cfdc2b3187a102655381",  # Luis Romance
+    _normalize("Pescador Luis: Adelante Wartortle!"): "55d8cfdc2b3187a102655381",  # Luis Romance
 }
 
 
