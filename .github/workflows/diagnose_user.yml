@@ -1,0 +1,47 @@
+name: Futmondo Diagnose User
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: 'ID del usuario a diagnosticar'
+        required: false
+        default: '5751f75a476eb299232a7a8f'
+
+concurrency:
+  group: futmondo-diagnose-user
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Sync primero (datos frescos)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.main
+
+      - name: Diagnosticar usuario
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FUTMONDO_EMAIL: ${{ secrets.FUTMONDO_EMAIL }}
+          FUTMONDO_PASSWORD: ${{ secrets.FUTMONDO_PASSWORD }}
+          CHAMPIONSHIP_ID: ${{ secrets.CHAMPIONSHIP_ID }}
+        run: python -m src.diagnose_user ${{ github.event.inputs.user_id }}
